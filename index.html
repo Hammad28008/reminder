@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Reminder Pro</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/x-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📝</text></svg>">
+</head>
+<body>
+    <!-- Notification Panel -->
+    <div id="notificationPanel" class="notification-panel">
+        <div class="notification-header">
+            <h3><i class="fas fa-bell"></i> Recent Notifications</h3>
+            <button id="clearNotifications" class="btn-small"><i class="fas fa-trash"></i> Clear</button>
+        </div>
+        <div id="notificationsList" class="notifications-list">
+            <!-- Notifications will appear here -->
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <i class="fas fa-tasks"></i>
+                <h1>Task Reminder Pro</h1>
+                <span class="tagline">Never Miss a Deadline Again</span>
+            </div>
+            
+            <div class="header-controls">
+                <button id="settingsBtn" class="btn-icon" title="Settings">
+                    <i class="fas fa-cog"></i>
+                </button>
+                <button id="exportBtn" class="btn-icon" title="Export Tasks">
+                    <i class="fas fa-file-export"></i>
+                </button>
+                <button id="historyBtn" class="btn-icon" title="Task History">
+                    <i class="fas fa-history"></i>
+                </button>
+                <div class="stats">
+                    <span id="taskStats">0 Tasks</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Left Panel - Add Task -->
+            <div class="left-panel">
+                <div class="card">
+                    <h2><i class="fas fa-plus-circle"></i> Add New Task</h2>
+                    
+                    <div class="form-group">
+                        <label for="taskName"><i class="fas fa-heading"></i> Task Name *</label>
+                        <input type="text" id="taskName" placeholder="Enter task name..." class="form-control">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="taskDesc"><i class="fas fa-align-left"></i> Description</label>
+                        <textarea id="taskDesc" placeholder="Task details..." class="form-control" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="taskDate"><i class="fas fa-calendar"></i> Due Date *</label>
+                            <input type="date" id="taskDate" class="form-control">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="taskTime"><i class="fas fa-clock"></i> Time *</label>
+                            <input type="time" id="taskTime" class="form-control" value="18:00">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label><i class="fas fa-flag"></i> Priority</label>
+                        <div class="priority-buttons">
+                            <button class="priority-btn low" data-priority="low">
+                                <i class="fas fa-flag"></i> Low
+                            </button>
+                            <button class="priority-btn medium active" data-priority="medium">
+                                <i class="fas fa-flag"></i> Medium
+                            </button>
+                            <button class="priority-btn high" data-priority="high">
+                                <i class="fas fa-flag"></i> High
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <button id="addTaskBtn" class="btn-primary btn-large">
+                        <i class="fas fa-plus"></i> Add Task
+                    </button>
+                    
+                    <div class="quick-actions">
+                        <button id="quickToday" class="btn-small btn-outline">
+                            <i class="fas fa-bolt"></i> Today
+                        </button>
+                        <button id="quickTomorrow" class="btn-small btn-outline">
+                            <i class="fas fa-sun"></i> Tomorrow
+                        </button>
+                        <button id="quickWeek" class="btn-small btn-outline">
+                            <i class="fas fa-calendar-week"></i> This Week
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- AI Help Generator -->
+                <div class="card help-card">
+                    <h2><i class="fas fa-robot"></i> AI Assistance</h2>
+                    <p>Stuck on a task? Generate a prompt to get AI help!</p>
+                    <button id="generateHelpBtn" class="btn-secondary">
+                        <i class="fas fa-magic"></i> Generate Help Prompt
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Panel - Task List -->
+            <div class="right-panel">
+                <div class="card">
+                    <div class="task-header">
+                        <h2><i class="fas fa-list-check"></i> Your Tasks</h2>
+                        <div class="task-filters">
+                            <button class="filter-btn active" data-filter="all">All</button>
+                            <button class="filter-btn" data-filter="pending">Pending</button>
+                            <button class="filter-btn" data-filter="completed">Completed</button>
+                            <button class="filter-btn" data-filter="overdue">Overdue</button>
+                        </div>
+                    </div>
+                    
+                    <div class="task-controls">
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="taskSearch" placeholder="Search tasks...">
+                        </div>
+                        <button id="refreshTasks" class="btn-small" title="Refresh">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                    
+                    <div id="tasksContainer" class="tasks-container">
+                        <!-- Tasks will load here -->
+                        <div class="empty-state">
+                            <i class="fas fa-clipboard-list fa-3x"></i>
+                            <h3>No Tasks Yet</h3>
+                            <p>Add your first task using the form on the left</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="reminder-status">
+                <span id="reminderStatus">
+                    <i class="fas fa-bell-slash"></i> Reminders: Off
+                </span>
+                <span class="last-saved" id="lastSaved">Never saved</span>
+            </div>
+            <div class="footer-info">
+                <span>Total Tasks: <span id="totalTasks">0</span></span>
+                <span>Pending: <span id="pendingTasks">0</span></span>
+                <span>Completed: <span id="completedTasks">0</span></span>
+                <button id="notificationToggle" class="btn-small">
+                    <i class="fas fa-bell"></i> Enable Notifications
+                </button>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Modals -->
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-cog"></i> Settings</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-section">
+                    <h3><i class="fas fa-bell"></i> Reminder Settings</h3>
+                    <div class="form-group">
+                        <label>Reminder Before Deadline:</label>
+                        <select id="reminderTime" class="form-control">
+                            <option value="1">1 minute</option>
+                            <option value="5">5 minutes</option>
+                            <option value="10" selected>10 minutes</option>
+                            <option value="15">15 minutes</option>
+                            <option value="30">30 minutes</option>
+                            <option value="60">1 hour</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Notification Sound:</label>
+                        <select id="notificationSound" class="form-control">
+                            <option value="alert1.mp3">Sound 1 (Default)</option>
+                            <option value="alert2.mp3">Sound 2 (Beep)</option>
+                            <option value="alert3.mp3">Sound 3 (Chime)</option>
+                            <option value="none">No Sound</option>
+                        </select>
+                        <button id="testSound" class="btn-small"><i class="fas fa-play"></i> Test</button>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="desktopNotifications" checked>
+                            Enable Desktop Notifications
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="settings-section">
+                    <h3><i class="fas fa-file-export"></i> Data Management</h3>
+                    <div class="form-group">
+                        <label>Auto-save Interval:</label>
+                        <select id="autoSaveInterval" class="form-control">
+                            <option value="1">1 minute</option>
+                            <option value="5" selected>5 minutes</option>
+                            <option value="10">10 minutes</option>
+                            <option value="30">30 minutes</option>
+                        </select>
+                    </div>
+                    
+                    <div class="button-group">
+                        <button id="exportCSV" class="btn-secondary">
+                            <i class="fas fa-file-csv"></i> Export to CSV
+                        </button>
+                        <button id="importCSV" class="btn-secondary">
+                            <i class="fas fa-file-import"></i> Import CSV
+                        </button>
+                        <button id="backupTasks" class="btn-secondary">
+                            <i class="fas fa-save"></i> Backup Now
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Help Modal -->
+    <div id="helpModal" class="modal">
+        <div class="modal-content large-modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-robot"></i> AI Help Generator</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Select Task to Get Help With:</label>
+                    <select id="helpTaskSelect" class="form-control">
+                        <!-- Tasks will be populated here -->
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Problem Type:</label>
+                    <select id="problemType" class="form-control">
+                        <option value="technical">Technical Issue</option>
+                        <option value="time">Time Management</option>
+                        <option value="understanding">Understanding Task</option>
+                        <option value="resources">Lack of Resources</option>
+                        <option value="motivation">Motivation/Procrastination</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Describe the Problem:</label>
+                    <textarea id="problemDesc" class="form-control" rows="3" 
+                              placeholder="What specific issue are you facing?"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label>What Have You Tried?</label>
+                    <textarea id="triedSolutions" class="form-control" rows="2" 
+                              placeholder="List what you've attempted so far..."></textarea>
+                </div>
+                
+                <button id="generatePromptBtn" class="btn-primary btn-large">
+                    <i class="fas fa-magic"></i> Generate AI Prompt
+                </button>
+                
+                <div id="promptResult" class="prompt-result" style="display: none;">
+                    <h3>Your AI Prompt:</h3>
+                    <div class="prompt-box">
+                        <textarea id="generatedPrompt" readonly class="form-control" rows="10"></textarea>
+                        <div class="prompt-actions">
+                            <button id="copyPrompt" class="btn-secondary">
+                                <i class="fas fa-copy"></i> Copy to Clipboard
+                            </button>
+                            <button id="savePrompt" class="btn-secondary">
+                                <i class="fas fa-save"></i> Save as File
+                            </button>
+                            <button id="useWithAI" class="btn-primary">
+                                <i class="fas fa-robot"></i> Use with AI Assistant
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sound Elements -->
+    <audio id="alertSound1" preload="auto">
+        <source src="sounds/alert1.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="alertSound2" preload="auto">
+        <source src="sounds/alert2.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="alertSound3" preload="auto">
+        <source src="sounds/alert3.mp3" type="audio/mpeg">
+    </audio>
+
+    <!-- JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.0/papaparse.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
