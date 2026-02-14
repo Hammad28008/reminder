@@ -1,21 +1,30 @@
-class TaskReminder {
+class BusinessManager {
     constructor() {
+        // Data storage
         this.tasks = [];
-        this.currentFilter = 'all';
-        this.searchTerm = '';
-        this.reminderInterval = null;
-        this.autoSaveInterval = null;
-        this.notificationPermission = false;
-        this.settings = this.loadSettings();
-        this.csvFileName = 'tasks.csv';
-        this.historyFileName = 'task_history.csv';
+        this.companies = [];
+        this.meetings = [];
+        this.documents = [];
         
+        // UI State
+        this.currentTab = 'tasks';
+        this.currentCompanyFilter = 'all';
+        this.currentMeetingFilter = 'upcoming';
+        this.searchTerms = { tasks: '', companies: '', meetings: '' };
+        
+        // Settings
+        this.settings = this.loadSettings();
+        
+        // UAE Timezone (GMT+4)
+        this.uaeTimezone = 'Asia/Dubai';
+        
+        // Initialize
         this.initializeApp();
     }
     
     initializeApp() {
-        // Load tasks from CSV
-        this.loadTasksFromCSV();
+        // Load all data
+        this.loadAllData();
         
         // Initialize event listeners
         this.initEventListeners();
@@ -27,13 +36,16 @@ class TaskReminder {
         this.requestNotificationPermission();
         
         // Update UI
-        this.updateStats();
+        this.updateAllStats();
+        this.updateUAETime();
         
-        // Check for due tasks on startup
-        this.checkDueTasks();
+        // Check for reminders
+        this.checkAllReminders();
         
         // Update last saved time
         this.updateLastSaved();
+        
+        console.log('Business Manager initialized with UAE timezone');
     }
     
     loadSettings() {
@@ -42,304 +54,1758 @@ class TaskReminder {
             notificationSound: 'alert1.mp3',
             desktopNotifications: true,
             autoSaveInterval: 5,
-            autoDownloadCSV: false // New setting to control CSV downloads
+            licenseReminders: true,
+            defaultWorkStart: '09:00',
+            defaultWorkEnd: '17:00',
+            meetingDuration: 60,
+            meetingBuffer: 15
         };
         
-        const saved = localStorage.getItem('taskReminderSettings');
+        const saved = localStorage.getItem('businessManagerSettings');
         return saved ? JSON.parse(saved) : defaultSettings;
     }
     
     saveSettings() {
-        localStorage.setItem('taskReminderSettings', JSON.stringify(this.settings));
+        localStorage.setItem('businessManagerSettings', JSON.stringify(this.settings));
     }
     
-    async loadTasksFromCSV() {
+    loadAllData() {
+        // Load tasks
         try {
-            // Try to load from localStorage first (for backup)
-            const localTasks = localStorage.getItem('taskReminderTasks');
-            if (localTasks) {
-                this.tasks = JSON.parse(localTasks);
-                console.log('Loaded tasks from localStorage');
-            }
-            
-            // Try to load from CSV file
-            await this.loadCSVFile();
+            const tasksData = localStorage.getItem('businessTasks');
+            this.tasks = tasksData ? JSON.parse(tasksData) : [];
         } catch (error) {
             console.error('Error loading tasks:', error);
             this.tasks = [];
         }
-    }
-    
-    async loadCSVFile() {
+        
+        // Load companies
         try {
-            const response = await fetch(this.csvFileName);
-            if (response.ok) {
-                const csvText = await response.text();
-                this.parseCSV(csvText);
-            }
+            const companiesData = localStorage.getItem('businessCompanies');
+            this.companies = companiesData ? JSON.parse(companiesData) : [];
         } catch (error) {
-            console.log('No CSV file found, starting fresh');
-            // Create initial CSV file if it doesn't exist
-            await this.saveTasksToStorage(); // Only save to localStorage, don't download
-        }
-    }
-    
-    parseCSV(csvText) {
-        const lines = csvText.split('\n').filter(line => line.trim());
-        if (lines.length <= 1) return; // Only header or empty
-        
-        // Parse CSV data
-        const newTasks = [];
-        for (let i = 1; i < lines.length; i++) {
-            // Handle CSV with quoted fields containing commas
-            const row = this.parseCSVRow(lines[i]);
-            
-            if (row.length >= 8) {
-                const task = {
-                    id: parseInt(row[0]) || newTasks.length + 1,
-                    name: row[1].replace(/^"|"$/g, ''), // Remove quotes
-                    description: row[2].replace(/^"|"$/g, ''),
-                    deadline: row[3],
-                    priority: row[4],
-                    status: row[5],
-                    createdAt: row[6] || new Date().toISOString(),
-                    completedAt: row[7] || null,
-                    lastReminded: row[8] || null,
-                    lastOverdueReminded: row[9] || null
-                };
-                newTasks.push(task);
-            }
+            console.error('Error loading companies:', error);
+            this.companies = [];
         }
         
-        // Only update if we found tasks
-        if (newTasks.length > 0) {
-            this.tasks = newTasks;
-            console.log(`Loaded ${this.tasks.length} tasks from CSV`);
+        // Load meetings
+        try {
+            const meetingsData = localStorage.getItem('businessMeetings');
+            this.meetings = meetingsData ? JSON.parse(meetingsData) : [];
+        } catch (error) {
+            console.error('Error loading meetings:', error);
+            this.meetings = [];
         }
         
-        // Update display
+        // Load documents
+        try {
+            const documentsData = localStorage.getItem('businessDocuments');
+            this.documents = documentsData ? JSON.parse(documentsData) : [];
+        } catch (error) {
+            console.error('Error loading documents:', error);
+            this.documents = [];
+        }
+        
+        // Update displays
         this.displayTasks();
+        this.displayCompanies();
+        this.displayMeetings();
+        this.populateCompanySelects();
     }
     
-    parseCSVRow(line) {
-        const result = [];
-        let current = '';
-        let inQuotes = false;
+    saveAllData() {
+        // Save all data to localStorage
+        localStorage.setItem('businessTasks', JSON.stringify(this.tasks));
+        localStorage.setItem('businessCompanies', JSON.stringify(this.companies));
+        localStorage.setItem('businessMeetings', JSON.stringify(this.meetings));
+        localStorage.setItem('businessDocuments', JSON.stringify(this.documents));
+        localStorage.setItem('businessLastSave', new Date().toISOString());
         
-        for (let i = 0; i < line.length; i++) {
-            const char = line[i];
-            const nextChar = line[i + 1];
+        this.updateLastSaved();
+        console.log('All data saved to localStorage');
+    }
+    
+    // UAE Time Functions
+    getCurrentUAETime() {
+        return new Date().toLocaleString('en-US', { timeZone: this.uaeTimezone });
+    }
+    
+    formatUAEDate(date) {
+        return new Date(date).toLocaleString('en-US', { 
+            timeZone: this.uaeTimezone,
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+    
+    isSlotAvailable(dateTime, duration, buffer) {
+        const proposedStart = new Date(dateTime);
+        const proposedEnd = new Date(proposedStart.getTime() + duration * 60000);
+        
+        // Check against existing meetings
+        for (const meeting of this.meetings) {
+            if (meeting.status === 'cancelled') continue;
             
-            if (char === '"' && nextChar === '"') {
-                current += '"';
-                i++; // Skip next quote
-            } else if (char === '"') {
-                inQuotes = !inQuotes;
-            } else if (char === ',' && !inQuotes) {
-                result.push(current);
-                current = '';
-            } else {
-                current += char;
+            const meetingStart = new Date(meeting.dateTime);
+            const meetingEnd = new Date(meetingStart.getTime() + meeting.duration * 60000);
+            
+            // Add buffer time
+            const bufferedStart = new Date(meetingStart.getTime() - buffer * 60000);
+            const bufferedEnd = new Date(meetingEnd.getTime() + buffer * 60000);
+            
+            // Check for overlap
+            if (proposedStart < bufferedEnd && proposedEnd > bufferedStart) {
+                return false;
             }
         }
         
-        result.push(current); // Add last field
-        return result;
+        return true;
     }
     
-    async saveTasksToStorage(download = false) {
-        // Save to localStorage
-        localStorage.setItem('taskReminderTasks', JSON.stringify(this.tasks));
-        localStorage.setItem('taskReminderLastSave', new Date().toISOString());
+    generateTimeSlots(date, startTime, endTime, duration, breakTime) {
+        const slots = [];
+        const start = new Date(`${date}T${startTime}:00`);
+        const end = new Date(`${date}T${endTime}:00`);
         
-        // Save to CSV file only if download is requested
-        if (download || this.settings.autoDownloadCSV) {
-            await this.downloadCSVFile();
-        } else {
-            // Just save to localStorage and update the page
-            await this.saveCSVToLocalStorage();
+        let current = new Date(start);
+        
+        while (current < end) {
+            const slotEnd = new Date(current.getTime() + duration * 60000);
+            
+            if (slotEnd <= end) {
+                const slotTime = current.toLocaleTimeString('en-US', { 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    timeZone: this.uaeTimezone 
+                });
+                
+                const isAvailable = this.isSlotAvailable(current, duration, 0);
+                
+                slots.push({
+                    time: slotTime,
+                    datetime: current.toISOString(),
+                    available: isAvailable,
+                    endTime: slotEnd.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+                });
+            }
+            
+            // Move to next slot
+            current = new Date(current.getTime() + (duration + breakTime) * 60000);
         }
         
-        // Update last saved time
-        this.updateLastSaved();
-        
-        console.log(`Tasks saved to ${download ? 'CSV file' : 'localStorage'}`);
+        return slots;
     }
     
-    async downloadCSVFile() {
-        // Prepare CSV data
-        const csvContent = this.generateCSVContent();
-        
-        // Create blob and download link
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = this.csvFileName;
-        link.style.display = 'none';
-        
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        // Clean up
-        setTimeout(() => URL.revokeObjectURL(url), 100);
-    }
-    
-    async saveCSVToLocalStorage() {
-        // Save CSV content to localStorage for backup
-        const csvContent = this.generateCSVContent();
-        localStorage.setItem('taskReminderCSV', csvContent);
-    }
-    
-    generateCSVContent() {
-        // CSV header
-        let csvContent = 'ID,Name,Description,Deadline,Priority,Status,CreatedAt,CompletedAt,LastReminded,LastOverdueReminded\n';
-        
-        // Add each task
-        this.tasks.forEach(task => {
-            const row = [
-                task.id,
-                `"${(task.name || '').replace(/"/g, '""')}"`,
-                `"${(task.description || '').replace(/"/g, '""')}"`,
-                task.deadline,
-                task.priority,
-                task.status,
-                task.createdAt,
-                task.completedAt || '',
-                task.lastReminded || '',
-                task.lastOverdueReminded || ''
-            ];
-            csvContent += row.join(',') + '\n';
-        });
-        
-        return csvContent;
-    }
-    
-    backupToHistory(task) {
-        // Create history entry
-        const historyEntry = {
-            ...task,
-            archivedAt: new Date().toISOString(),
-            historyId: Date.now()
+    // Company Functions
+    addCompany(companyData) {
+        const newCompany = {
+            id: this.companies.length > 0 ? Math.max(...this.companies.map(c => c.id)) + 1 : 1,
+            ...companyData,
+            createdAt: new Date().toISOString(),
+            documents: companyData.documents || [],
+            status: this.getLicenseStatus(companyData.licenseExpiry)
         };
         
-        // Get existing history
-        let history = [];
-        try {
-            const historyData = localStorage.getItem('taskHistory');
-            if (historyData) {
-                history = JSON.parse(historyData);
+        this.companies.push(newCompany);
+        this.saveAllData();
+        this.displayCompanies();
+        this.populateCompanySelects();
+        this.updateAllStats();
+        
+        this.showNotification('Company Added', `${newCompany.name} has been added`, 'success');
+        
+        // Check license expiry
+        this.checkLicenseExpiry(newCompany);
+        
+        return newCompany;
+    }
+    
+    getLicenseStatus(expiryDate) {
+        const today = new Date();
+        const expiry = new Date(expiryDate);
+        const daysUntilExpiry = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+        
+        if (daysUntilExpiry < 0) return 'expired';
+        if (daysUntilExpiry <= 30) return 'expiring-soon';
+        return 'active';
+    }
+    
+    updateCompany(companyId, updates) {
+        const index = this.companies.findIndex(c => c.id === companyId);
+        if (index === -1) return;
+        
+        this.companies[index] = { ...this.companies[index], ...updates };
+        this.companies[index].status = this.getLicenseStatus(this.companies[index].licenseExpiry);
+        
+        this.saveAllData();
+        this.displayCompanies();
+        this.showNotification('Company Updated', 'Company details updated', 'success');
+    }
+    
+    deleteCompany(companyId) {
+        if (!confirm('Are you sure you want to delete this company? All related meetings will also be deleted.')) return;
+        
+        // Delete related meetings
+        this.meetings = this.meetings.filter(m => m.companyId !== companyId);
+        
+        // Delete company
+        this.companies = this.companies.filter(c => c.id !== companyId);
+        
+        this.saveAllData();
+        this.displayCompanies();
+        this.displayMeetings();
+        this.populateCompanySelects();
+        this.updateAllStats();
+        
+        this.showNotification('Company Deleted', 'Company has been removed', 'warning');
+    }
+    
+    // Meeting Functions
+    scheduleMeeting(meetingData) {
+        // Check availability
+        const isAvailable = this.isSlotAvailable(
+            meetingData.dateTime, 
+            meetingData.duration, 
+            meetingData.buffer || 0
+        );
+        
+        if (!isAvailable) {
+            this.showNotification('Slot Not Available', 'This time slot is already booked', 'danger');
+            return null;
+        }
+        
+        const newMeeting = {
+            id: this.meetings.length > 0 ? Math.max(...this.meetings.map(m => m.id)) + 1 : 1,
+            ...meetingData,
+            status: 'scheduled',
+            createdAt: new Date().toISOString(),
+            documents: [],
+            reminders: {
+                '1day': false,
+                '1hour': false,
+                '30min': false
             }
-        } catch (error) {
-            console.error('Error loading history:', error);
-        }
+        };
         
-        // Add new entry
-        history.push(historyEntry);
+        this.meetings.push(newMeeting);
+        this.saveAllData();
+        this.displayMeetings();
+        this.updateAllStats();
+        this.updateCalendar();
         
-        // Keep only last 1000 history entries
-        if (history.length > 1000) {
-            history = history.slice(-1000);
-        }
+        this.showNotification('Meeting Scheduled', `Meeting with ${this.getCompanyName(meetingData.companyId)} scheduled`, 'success');
         
-        // Save back
-        localStorage.setItem('taskHistory', JSON.stringify(history));
-        
-        // Also append to history CSV in localStorage
-        this.appendToHistoryStorage(historyEntry);
+        return newMeeting;
     }
     
-    appendToHistoryStorage(task) {
-        const historyEntry = [
-            task.id,
-            `"${(task.name || '').replace(/"/g, '""')}"`,
-            `"${(task.description || '').replace(/"/g, '""')}"`,
-            task.deadline,
-            task.priority,
-            task.status,
-            task.createdAt,
-            task.completedAt || '',
-            new Date().toISOString()
-        ].join(',') + '\n';
-        
-        // Get existing history CSV
-        let historyCSV = localStorage.getItem('taskHistoryCSV') || 
-                        'ID,Name,Description,Deadline,Priority,Status,CreatedAt,CompletedAt,ArchivedAt\n';
-        
-        // Append new entry
-        historyCSV += historyEntry;
-        
-        // Save back to localStorage
-        localStorage.setItem('taskHistoryCSV', historyCSV);
+    getCompanyName(companyId) {
+        const company = this.companies.find(c => c.id === companyId);
+        return company ? company.name : 'Unknown Company';
     }
     
-    addTask(taskData) {
+    confirmMeeting(meetingId, documents) {
+        const meeting = this.meetings.find(m => m.id === meetingId);
+        if (!meeting) return;
+        
+        meeting.status = 'confirmed';
+        meeting.confirmedAt = new Date().toISOString();
+        meeting.documents = [...(meeting.documents || []), ...documents];
+        
+        this.saveAllData();
+        this.displayMeetings();
+        
+        this.showNotification('Meeting Confirmed', 'Meeting has been confirmed', 'success');
+    }
+    
+    cancelMeeting(meetingId, reason) {
+        const meeting = this.meetings.find(m => m.id === meetingId);
+        if (!meeting) return;
+        
+        meeting.status = 'cancelled';
+        meeting.cancelledAt = new Date().toISOString();
+        meeting.cancellationReason = reason;
+        
+        this.saveAllData();
+        this.displayMeetings();
+        
+        this.showNotification('Meeting Cancelled', 'Meeting has been cancelled', 'warning');
+    }
+    
+    getUpcomingMeetings() {
         const now = new Date();
+        return this.meetings
+            .filter(m => m.status !== 'cancelled' && new Date(m.dateTime) > now)
+            .sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+    }
+    
+    getTodaysMeetings() {
+        const today = new Date().toISOString().split('T')[0];
+        return this.meetings.filter(m => {
+            const meetingDate = new Date(m.dateTime).toISOString().split('T')[0];
+            return meetingDate === today && m.status !== 'cancelled';
+        });
+    }
+    
+    // Document Functions
+    addDocument(documentData, file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            
+            reader.onload = (e) => {
+                const newDoc = {
+                    id: this.documents.length > 0 ? Math.max(...this.documents.map(d => d.id)) + 1 : 1,
+                    ...documentData,
+                    fileData: e.target.result,
+                    fileName: file.name,
+                    fileType: file.type,
+                    fileSize: file.size,
+                    uploadedAt: new Date().toISOString()
+                };
+                
+                this.documents.push(newDoc);
+                
+                // Link to company or meeting
+                if (documentData.targetType === 'company') {
+                    const company = this.companies.find(c => c.id === documentData.targetId);
+                    if (company) {
+                        if (!company.documents) company.documents = [];
+                        company.documents.push(newDoc.id);
+                    }
+                } else if (documentData.targetType === 'meeting') {
+                    const meeting = this.meetings.find(m => m.id === documentData.targetId);
+                    if (meeting) {
+                        if (!meeting.documents) meeting.documents = [];
+                        meeting.documents.push(newDoc.id);
+                    }
+                }
+                
+                this.saveAllData();
+                resolve(newDoc);
+            };
+            
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+    
+    getDocumentsForTarget(targetType, targetId) {
+        const target = targetType === 'company' 
+            ? this.companies.find(c => c.id === targetId)
+            : this.meetings.find(m => m.id === targetId);
+            
+        if (!target || !target.documents) return [];
+        
+        return this.documents.filter(doc => target.documents.includes(doc.id));
+    }
+    
+    // Reminder Functions
+    checkAllReminders() {
+        // Check meeting reminders
+        this.checkMeetingReminders();
+        
+        // Check license expiry reminders
+        if (this.settings.licenseReminders) {
+            this.checkLicenseReminders();
+        }
+        
+        // Check task reminders (existing)
+        this.checkTaskReminders();
+    }
+    
+    checkMeetingReminders() {
+        const now = new Date();
+        const reminderTimes = [1440, 60, 30]; // 1 day, 1 hour, 30 minutes in minutes
+        
+        this.meetings.forEach(meeting => {
+            if (meeting.status === 'cancelled' || meeting.status === 'completed') return;
+            
+            const meetingTime = new Date(meeting.dateTime);
+            const minutesUntil = (meetingTime - now) / (1000 * 60);
+            
+            reminderTimes.forEach(reminderMin => {
+                const reminderKey = `${reminderMin}min`;
+                if (minutesUntil > 0 && minutesUntil <= reminderMin && !meeting.reminders[reminderKey]) {
+                    this.sendMeetingReminder(meeting, reminderMin);
+                    meeting.reminders[reminderKey] = true;
+                }
+            });
+        });
+        
+        this.saveAllData();
+    }
+    
+    sendMeetingReminder(meeting, minutesBefore) {
+        const companyName = this.getCompanyName(meeting.companyId);
+        let timeText = '';
+        
+        if (minutesBefore === 1440) timeText = '1 day';
+        else if (minutesBefore === 60) timeText = '1 hour';
+        else timeText = '30 minutes';
+        
+        const title = `📅 Meeting Reminder: ${companyName}`;
+        const body = `${meeting.title} in ${timeText} at ${this.formatUAEDate(meeting.dateTime)}`;
+        
+        this.showNotification(title, body, 'warning');
+        this.playAlertSound();
+        
+        // Add to notification panel
+        this.addToNotificationPanel(title, body, 'warning');
+    }
+    
+    checkLicenseReminders() {
+        const today = new Date();
+        const reminderDays = [30, 14, 7, 1]; // 30 days, 14 days, 7 days, 1 day
+        
+        this.companies.forEach(company => {
+            const expiryDate = new Date(company.licenseExpiry);
+            const daysUntilExpiry = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+            
+            reminderDays.forEach(reminderDay => {
+                if (daysUntilExpiry === reminderDay && !company[`licenseReminded_${reminderDay}`]) {
+                    this.sendLicenseReminder(company, reminderDay);
+                    company[`licenseReminded_${reminderDay}`] = true;
+                }
+            });
+        });
+        
+        this.saveAllData();
+    }
+    
+    sendLicenseReminder(company, daysLeft) {
+        const title = `⚠️ License Expiry: ${company.name}`;
+        const body = `License expires in ${daysLeft} day${daysLeft > 1 ? 's' : ''}`;
+        
+        this.showNotification(title, body, 'danger');
+        this.playAlertSound();
+        
+        this.addToNotificationPanel(title, body, 'danger');
+    }
+    
+    checkTaskReminders() {
+        const now = new Date();
+        const reminderMinutes = this.settings.reminderTime;
+        
+        this.tasks.forEach(task => {
+            if (task.status === 'pending') {
+                const deadline = new Date(task.deadline);
+                const minutesLeft = (deadline - now) / (1000 * 60);
+                
+                if (minutesLeft > 0 && minutesLeft <= reminderMinutes && !task.reminded) {
+                    this.sendTaskReminder(task, minutesLeft);
+                    task.reminded = true;
+                }
+                
+                if (minutesLeft < 0 && !task.overdueReminded) {
+                    this.sendTaskOverdueReminder(task);
+                    task.overdueReminded = true;
+                }
+            }
+        });
+        
+        this.saveAllData();
+    }
+    
+    sendTaskReminder(task, minutesLeft) {
+        const title = `⏰ Task Due Soon: ${task.name}`;
+        const body = `Due in ${Math.floor(minutesLeft)} minutes`;
+        
+        this.showNotification(title, body, 'warning');
+        this.playAlertSound();
+        this.addToNotificationPanel(title, body, 'warning');
+    }
+    
+    sendTaskOverdueReminder(task) {
+        const title = `⚠️ Task Overdue: ${task.name}`;
+        const body = `Task was due ${this.formatUAEDate(task.deadline)}`;
+        
+        this.showNotification(title, body, 'danger');
+        this.playAlertSound();
+        this.addToNotificationPanel(title, body, 'danger');
+    }
+    
+    // Display Functions
+    displayCompanies() {
+        const container = document.getElementById('companiesContainer');
+        if (!container) return;
+        
+        let filteredCompanies = this.companies;
+        
+        // Apply filter
+        if (this.currentCompanyFilter === 'active') {
+            filteredCompanies = filteredCompanies.filter(c => c.status === 'active');
+        } else if (this.currentCompanyFilter === 'expiring') {
+            filteredCompanies = filteredCompanies.filter(c => c.status === 'expiring-soon');
+        } else if (this.currentCompanyFilter === 'expired') {
+            filteredCompanies = filteredCompanies.filter(c => c.status === 'expired');
+        }
+        
+        // Apply search
+        if (this.searchTerms.companies) {
+            const searchLower = this.searchTerms.companies.toLowerCase();
+            filteredCompanies = filteredCompanies.filter(c => 
+                c.name.toLowerCase().includes(searchLower) ||
+                c.licenseNumber.toLowerCase().includes(searchLower) ||
+                (c.contactPerson && c.contactPerson.toLowerCase().includes(searchLower))
+            );
+        }
+        
+        container.innerHTML = '';
+        
+        if (filteredCompanies.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-building fa-3x"></i>
+                    <h3>No Companies Found</h3>
+                    <p>Add your first company using the form</p>
+                </div>
+            `;
+            return;
+        }
+        
+        filteredCompanies.sort((a, b) => {
+            if (a.status === 'expired' && b.status !== 'expired') return -1;
+            if (a.status !== 'expired' && b.status === 'expired') return 1;
+            return new Date(a.licenseExpiry) - new Date(b.licenseExpiry);
+        });
+        
+        filteredCompanies.forEach(company => {
+            const element = this.createCompanyElement(company);
+            container.appendChild(element);
+        });
+    }
+    
+    createCompanyElement(company) {
+        const div = document.createElement('div');
+        div.className = `company-item ${company.status}`;
+        
+        const expiryDate = new Date(company.licenseExpiry);
+        const today = new Date();
+        const daysUntilExpiry = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+        
+        let expiryText = '';
+        if (daysUntilExpiry < 0) expiryText = `Expired ${Math.abs(daysUntilExpiry)} days ago`;
+        else if (daysUntilExpiry === 0) expiryText = 'Expires today!';
+        else expiryText = `Expires in ${daysUntilExpiry} days`;
+        
+        div.innerHTML = `
+            <div class="company-header">
+                <div class="company-title">
+                    <i class="fas fa-building"></i>
+                    <h3>${company.name}</h3>
+                    <span class="status-badge status-${company.status}">
+                        ${company.status === 'active' ? 'Active' : company.status === 'expiring-soon' ? 'Expiring Soon' : 'Expired'}
+                    </span>
+                </div>
+                <div class="company-actions">
+                    <button class="action-btn view-company" data-id="${company.id}" title="View Details">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="action-btn edit-company" data-id="${company.id}" title="Edit">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="action-btn delete-company" data-id="${company.id}" title="Delete">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                    <button class="action-btn schedule-meeting" data-id="${company.id}" title="Schedule Meeting">
+                        <i class="fas fa-calendar-plus"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="company-details">
+                <div class="detail-row">
+                    <i class="fas fa-id-card"></i>
+                    <span><strong>License:</strong> ${company.licenseNumber}</span>
+                </div>
+                <div class="detail-row">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span><strong>Expiry:</strong> ${expiryDate.toLocaleDateString()} (${expiryText})</span>
+                </div>
+                <div class="detail-row">
+                    <i class="fas fa-map-marker-alt"></i>
+                    <span><strong>Address:</strong> ${company.address}</span>
+                </div>
+                <div class="detail-row">
+                    <i class="fab fa-whatsapp"></i>
+                    <span><strong>WhatsApp:</strong> ${company.whatsapp}</span>
+                </div>
+                ${company.phone ? `
+                <div class="detail-row">
+                    <i class="fas fa-phone"></i>
+                    <span><strong>Phone:</strong> ${company.phone}</span>
+                </div>
+                ` : ''}
+                ${company.email ? `
+                <div class="detail-row">
+                    <i class="fas fa-envelope"></i>
+                    <span><strong>Email:</strong> ${company.email}</span>
+                </div>
+                ` : ''}
+                ${company.contactPerson ? `
+                <div class="detail-row">
+                    <i class="fas fa-user"></i>
+                    <span><strong>Contact:</strong> ${company.contactPerson}</span>
+                </div>
+                ` : ''}
+                ${company.industry ? `
+                <div class="detail-row">
+                    <i class="fas fa-industry"></i>
+                    <span><strong>Industry:</strong> ${company.industry}</span>
+                </div>
+                ` : ''}
+            </div>
+            
+            <div class="company-footer">
+                <span class="meeting-count">
+                    <i class="fas fa-calendar-check"></i>
+                    Meetings: ${this.meetings.filter(m => m.companyId === company.id).length}
+                </span>
+                <span class="document-count">
+                    <i class="fas fa-file-alt"></i>
+                    Docs: ${company.documents ? company.documents.length : 0}
+                </span>
+                <button class="btn-small upload-doc" data-company="${company.id}">
+                    <i class="fas fa-upload"></i> Upload
+                </button>
+            </div>
+        `;
+        
+        return div;
+    }
+    
+    displayMeetings() {
+        const container = document.getElementById('meetingsContainer');
+        if (!container) return;
+        
+        let filteredMeetings = this.meetings;
+        const now = new Date();
+        
+        // Apply filter
+        if (this.currentMeetingFilter === 'upcoming') {
+            filteredMeetings = filteredMeetings.filter(m => 
+                m.status !== 'cancelled' && new Date(m.dateTime) > now
+            );
+        } else if (this.currentMeetingFilter === 'today') {
+            const todayStr = now.toISOString().split('T')[0];
+            filteredMeetings = filteredMeetings.filter(m => {
+                const meetingDate = new Date(m.dateTime).toISOString().split('T')[0];
+                return meetingDate === todayStr && m.status !== 'cancelled';
+            });
+        } else if (this.currentMeetingFilter === 'pending') {
+            filteredMeetings = filteredMeetings.filter(m => m.status === 'pending');
+        } else if (this.currentMeetingFilter === 'past') {
+            filteredMeetings = filteredMeetings.filter(m => 
+                new Date(m.dateTime) < now || m.status === 'completed'
+            );
+        }
+        
+        // Apply search
+        if (this.searchTerms.meetings) {
+            const searchLower = this.searchTerms.meetings.toLowerCase();
+            filteredMeetings = filteredMeetings.filter(m => 
+                m.title.toLowerCase().includes(searchLower) ||
+                this.getCompanyName(m.companyId).toLowerCase().includes(searchLower)
+            );
+        }
+        
+        container.innerHTML = '';
+        
+        if (filteredMeetings.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-calendar-times fa-3x"></i>
+                    <h3>No Meetings Found</h3>
+                    <p>Schedule your first meeting</p>
+                </div>
+            `;
+            return;
+        }
+        
+        filteredMeetings.sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+        
+        filteredMeetings.forEach(meeting => {
+            const element = this.createMeetingElement(meeting);
+            container.appendChild(element);
+        });
+        
+        // Update today's meetings
+        this.displayTodaysMeetings();
+    }
+    
+    createMeetingElement(meeting) {
+        const div = document.createElement('div');
+        div.className = `meeting-item ${meeting.status}`;
+        
+        const companyName = this.getCompanyName(meeting.companyId);
+        const meetingTime = new Date(meeting.dateTime);
+        const now = new Date();
+        const timeUntil = meetingTime - now;
+        const hoursUntil = timeUntil / (1000 * 60 * 60);
+        
+        let statusText = '';
+        if (meeting.status === 'cancelled') statusText = 'Cancelled';
+        else if (meeting.status === 'confirmed') statusText = 'Confirmed';
+        else if (meeting.status === 'pending') statusText = 'Pending Confirmation';
+        else if (meetingTime < now) statusText = 'Past';
+        else if (hoursUntil < 1) statusText = 'Starting soon!';
+        else statusText = 'Scheduled';
+        
+        div.innerHTML = `
+            <div class="meeting-header">
+                <div class="meeting-title">
+                    <i class="fas fa-calendar-check"></i>
+                    <h3>${meeting.title}</h3>
+                    <span class="status-badge status-${meeting.status}">${statusText}</span>
+                </div>
+                <div class="meeting-actions">
+                    <button class="action-btn view-meeting" data-id="${meeting.id}" title="View Details">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="action-btn confirm-meeting" data-id="${meeting.id}" title="Confirm Meeting">
+                        <i class="fas fa-check-circle"></i>
+                    </button>
+                    <button class="action-btn cancel-meeting" data-id="${meeting.id}" title="Cancel Meeting">
+                        <i class="fas fa-times-circle"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="meeting-company">
+                <i class="fas fa-building"></i>
+                <strong>${companyName}</strong>
+            </div>
+            
+            <div class="meeting-datetime">
+                <div class="datetime-row">
+                    <i class="fas fa-calendar"></i>
+                    <span>${meetingTime.toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                    })}</span>
+                </div>
+                <div class="datetime-row">
+                    <i class="fas fa-clock"></i>
+                    <span>${meetingTime.toLocaleTimeString('en-US', { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+      })} (UAE) - Duration: ${meeting.duration} minutes</span>
+                </div>
+            </div>
+            
+            ${meeting.agenda ? `
+            <div class="meeting-agenda">
+                <i class="fas fa-sticky-note"></i>
+                <p>${meeting.agenda}</p>
+            </div>
+            ` : ''}
+            
+            <div class="meeting-footer">
+                <span class="platform-badge">
+                    <i class="fas fa-video"></i>
+                    ${meeting.platform || 'Not specified'}
+                </span>
+                ${meeting.link ? `
+                <a href="${meeting.link}" target="_blank" class="meeting-link">
+                    <i class="fas fa-link"></i> Join Meeting
+                </a>
+                ` : ''}
+                <span class="document-count">
+                    <i class="fas fa-file-alt"></i>
+                    Docs: ${meeting.documents ? meeting.documents.length : 0}
+                </span>
+            </div>
+        `;
+        
+        return div;
+    }
+    
+    displayTodaysMeetings() {
+        const container = document.getElementById('todayMeetingsList');
+        if (!container) return;
+        
+        const todayMeetings = this.getTodaysMeetings();
+        
+        if (todayMeetings.length === 0) {
+            container.innerHTML = '<p class="no-meetings">No meetings scheduled for today</p>';
+            return;
+        }
+        
+        container.innerHTML = todayMeetings.map(meeting => {
+            const meetingTime = new Date(meeting.dateTime);
+            const companyName = this.getCompanyName(meeting.companyId);
+            
+            return `
+                <div class="today-meeting-item">
+                    <div class="today-meeting-time">
+                        ${meetingTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                    <div class="today-meeting-info">
+                        <strong>${companyName}</strong>
+                        <span>${meeting.title}</span>
+                        <small>${meeting.duration} min</small>
+                    </div>
+                    ${meeting.link ? `
+                    <a href="${meeting.link}" target="_blank" class="join-now-btn">
+                        Join
+                    </a>
+                    ` : ''}
+                </div>
+            `;
+        }).join('');
+    }
+    
+    populateCompanySelects() {
+        const select = document.getElementById('meetingCompany');
+        if (!select) return;
+        
+        select.innerHTML = '<option value="">Choose a company...</option>';
+        
+        this.companies
+            .filter(c => c.status !== 'expired')
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .forEach(company => {
+                const option = document.createElement('option');
+                option.value = company.id;
+                option.textContent = `${company.name} (${company.licenseNumber})`;
+                select.appendChild(option);
+            });
+    }
+    
+    updateCalendar() {
+        const calendarGrid = document.getElementById('calendarGrid');
+        if (!calendarGrid) return;
+        
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+        
+        document.getElementById('currentMonthYear').textContent = 
+            now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        
+        const firstDay = new Date(currentYear, currentMonth, 1);
+        const lastDay = new Date(currentYear, currentMonth + 1, 0);
+        
+        let calendarHTML = '';
+        
+        // Empty cells for days before month starts
+        for (let i = 0; i < firstDay.getDay(); i++) {
+            calendarHTML += '<div class="calendar-day empty"></div>';
+        }
+        
+        // Days of the month
+        for (let day = 1; day <= lastDay.getDate(); day++) {
+            const date = new Date(currentYear, currentMonth, day);
+            const dateStr = date.toISOString().split('T')[0];
+            
+            // Count meetings on this day
+            const meetingsOnDay = this.meetings.filter(m => {
+                const meetingDate = new Date(m.dateTime).toISOString().split('T')[0];
+                return meetingDate === dateStr && m.status !== 'cancelled';
+            }).length;
+            
+            const isToday = date.toDateString() === new Date().toDateString();
+            
+            calendarHTML += `
+                <div class="calendar-day ${isToday ? 'today' : ''}" data-date="${dateStr}">
+                    <span class="day-number">${day}</span>
+                    ${meetingsOnDay > 0 ? `
+                        <span class="meeting-indicator">${meetingsOnDay} meeting${meetingsOnDay > 1 ? 's' : ''}</span>
+                    ` : ''}
+                </div>
+            `;
+        }
+        
+        calendarGrid.innerHTML = calendarHTML;
+    }
+    
+    updateAllStats() {
+        document.getElementById('totalCompanies').textContent = this.companies.length;
+        document.getElementById('totalMeetings').textContent = this.meetings.length;
+        
+        const totalTasks = this.tasks.length;
+        const pendingTasks = this.tasks.filter(t => t.status === 'pending').length;
+        document.getElementById('globalStats').innerHTML = `
+            <span>Tasks: ${totalTasks} (${pendingTasks}) | Companies: ${this.companies.length} | Meetings: ${this.meetings.length}</span>
+        `;
+    }
+    
+    updateUAETime() {
+        const updateTime = () => {
+            const uaeTime = new Date().toLocaleString('en-US', { 
+                timeZone: this.uaeTimezone,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            });
+            document.getElementById('uaeTime').textContent = uaeTime;
+        };
+        
+        updateTime();
+        setInterval(updateTime, 1000);
+    }
+    
+    // UI Functions
+    showNotification(title, message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `notification-item ${type}`;
+        notification.innerHTML = `
+            <strong>${title}</strong>
+            <p>${message}</p>
+            <div class="notification-time">${new Date().toLocaleTimeString()}</div>
+        `;
+        
+        const panel = document.getElementById('notificationsList');
+        if (panel) {
+            panel.insertBefore(notification, panel.firstChild);
+            this.showNotificationPanel();
+        }
+        
+        // Browser notification
+        if (this.settings.desktopNotifications && this.notificationPermission) {
+            new Notification(title, { body: message });
+        }
+    }
+    
+    showNotificationPanel() {
+        const panel = document.getElementById('notificationPanel');
+        if (panel) {
+            panel.style.display = 'block';
+            setTimeout(() => {
+                panel.style.display = 'none';
+            }, 10000);
+        }
+    }
+    
+    playAlertSound() {
+        if (this.settings.notificationSound === 'none') return;
+        
+        const soundId = `alertSound${this.settings.notificationSound.charAt(5)}`;
+        const audio = document.getElementById(soundId);
+        if (audio) {
+            audio.currentTime = 0;
+            audio.play().catch(e => console.log('Audio play failed:', e));
+        }
+    }
+    
+    async requestNotificationPermission() {
+        if ('Notification' in window) {
+            if (Notification.permission === 'default') {
+                const permission = await Notification.requestPermission();
+                this.notificationPermission = permission === 'granted';
+            } else {
+                this.notificationPermission = Notification.permission === 'granted';
+            }
+            this.updateReminderStatus();
+        }
+    }
+    
+    updateReminderStatus() {
+        const statusEl = document.getElementById('reminderStatus');
+        if (this.notificationPermission) {
+            statusEl.innerHTML = '<i class="fas fa-bell"></i> Reminders: On';
+            statusEl.style.background = '#d4edda';
+            statusEl.style.color = '#155724';
+        } else {
+            statusEl.innerHTML = '<i class="fas fa-bell-slash"></i> Reminders: Off';
+            statusEl.style.background = '#f8d7da';
+            statusEl.style.color = '#721c24';
+        }
+    }
+    
+    updateLastSaved() {
+        const lastSave = localStorage.getItem('businessLastSave');
+        if (lastSave) {
+            const date = new Date(lastSave);
+            document.getElementById('lastSaved').textContent = 
+                `Last saved: ${date.toLocaleTimeString()}`;
+        }
+    }
+    
+    setupIntervals() {
+        // Check reminders every minute
+        setInterval(() => {
+            this.checkAllReminders();
+        }, 60000);
+        
+        // Auto-save
+        setInterval(() => {
+            this.saveAllData();
+        }, this.settings.autoSaveInterval * 60000);
+    }
+    
+    // Event Listeners
+    initEventListeners() {
+        // Tab switching
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                e.target.closest('.tab-btn').classList.add('active');
+                const tabId = e.target.closest('.tab-btn').dataset.tab;
+                document.getElementById(`${tabId}Tab`).classList.add('active');
+                this.currentTab = tabId;
+            });
+        });
+        
+        // Add Task
+        document.getElementById('addTaskBtn').addEventListener('click', () => {
+            this.handleAddTask();
+        });
+        
+        // Add Company
+        document.getElementById('addCompanyBtn').addEventListener('click', () => {
+            this.handleAddCompany();
+        });
+        
+        // Schedule Meeting
+        document.getElementById('scheduleMeetingBtn').addEventListener('click', () => {
+            this.handleScheduleMeeting();
+        });
+        
+        // Check Availability
+        document.getElementById('checkAvailabilityBtn').addEventListener('click', () => {
+            this.handleCheckAvailability();
+        });
+        
+        // Generate Slots
+        document.getElementById('generateSlotsBtn').addEventListener('click', () => {
+            this.handleGenerateSlots();
+        });
+        
+        // Copy Slots
+        document.getElementById('copySlotsBtn').addEventListener('click', () => {
+            this.handleCopySlots();
+        });
+        
+        // Company Filters
+        document.querySelectorAll('[data-company-filter]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('[data-company-filter]').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                this.currentCompanyFilter = e.target.dataset.companyFilter;
+                this.displayCompanies();
+            });
+        });
+        
+        // Meeting Filters
+        document.querySelectorAll('[data-meeting-filter]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('[data-meeting-filter]').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                this.currentMeetingFilter = e.target.dataset.meetingFilter;
+                this.displayMeetings();
+            });
+        });
+        
+        // Search inputs
+        document.getElementById('taskSearch').addEventListener('input', (e) => {
+            this.searchTerms.tasks = e.target.value;
+            this.displayTasks();
+        });
+        
+        document.getElementById('companySearch').addEventListener('input', (e) => {
+            this.searchTerms.companies = e.target.value;
+            this.displayCompanies();
+        });
+        
+        document.getElementById('meetingSearch').addEventListener('input', (e) => {
+            this.searchTerms.meetings = e.target.value;
+            this.displayMeetings();
+        });
+        
+        // Delegated events for company actions
+        document.getElementById('companiesContainer').addEventListener('click', (e) => {
+            const target = e.target.closest('button');
+            if (!target) return;
+            
+            const companyId = parseInt(target.dataset.id);
+            
+            if (target.classList.contains('view-company')) {
+                this.showCompanyDetails(companyId);
+            } else if (target.classList.contains('edit-company')) {
+                this.editCompany(companyId);
+            } else if (target.classList.contains('delete-company')) {
+                this.deleteCompany(companyId);
+            } else if (target.classList.contains('schedule-meeting')) {
+                this.switchToMeetingsTab(companyId);
+            } else if (target.classList.contains('upload-doc')) {
+                this.openDocumentUpload('company', companyId);
+            }
+        });
+        
+        // Delegated events for meeting actions
+        document.getElementById('meetingsContainer').addEventListener('click', (e) => {
+            const target = e.target.closest('button');
+            if (!target) return;
+            
+            const meetingId = parseInt(target.dataset.id);
+            
+            if (target.classList.contains('view-meeting')) {
+                this.showMeetingDetails(meetingId);
+            } else if (target.classList.contains('confirm-meeting')) {
+                this.confirmMeeting(meetingId, []);
+            } else if (target.classList.contains('cancel-meeting')) {
+                const reason = prompt('Reason for cancellation:');
+                if (reason) this.cancelMeeting(meetingId, reason);
+            }
+        });
+        
+        // Settings button
+        document.getElementById('settingsBtn').addEventListener('click', () => {
+            this.openSettingsModal();
+        });
+        
+        // Export buttons
+        document.getElementById('exportCompaniesBtn').addEventListener('click', () => {
+            this.exportCompanies();
+        });
+        
+        document.getElementById('exportMeetingsBtn').addEventListener('click', () => {
+            this.exportMeetings();
+        });
+        
+        // Notification toggle
+        document.getElementById('notificationToggle').addEventListener('click', () => {
+            this.requestNotificationPermission();
+        });
+        
+        // Clear notifications
+        document.getElementById('clearNotifications').addEventListener('click', () => {
+            document.getElementById('notificationsList').innerHTML = '';
+        });
+        
+        // Modal close buttons
+        document.querySelectorAll('.modal-close').forEach(btn => {
+            btn.addEventListener('click', () => {
+                btn.closest('.modal').classList.remove('active');
+            });
+        });
+        
+        // Close modal on outside click
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.remove('active');
+                }
+            });
+        });
+        
+        // Reset company form
+        document.getElementById('resetCompanyForm').addEventListener('click', () => {
+            this.resetCompanyForm();
+        });
+        
+        // File upload handling
+        document.getElementById('companyDocuments').addEventListener('change', (e) => {
+            this.handleFileSelect(e.target.files, 'company');
+        });
+        
+        // Calendar navigation
+        document.getElementById('prevMonth').addEventListener('click', () => {
+            // Implement month navigation
+        });
+        
+        document.getElementById('nextMonth').addEventListener('click', () => {
+            // Implement month navigation
+        });
+    }
+    
+    handleAddTask() {
+        const name = document.getElementById('taskName').value.trim();
+        const description = document.getElementById('taskDesc').value.trim();
+        const date = document.getElementById('taskDate').value;
+        const time = document.getElementById('taskTime').value;
+        const priority = document.querySelector('.priority-btn.active').dataset.priority;
+        
+        if (!name || !date || !time) {
+            this.showNotification('Error', 'Please fill all required fields', 'danger');
+            return;
+        }
+        
         const newTask = {
             id: this.tasks.length > 0 ? Math.max(...this.tasks.map(t => t.id)) + 1 : 1,
-            name: taskData.name,
-            description: taskData.description || '',
-            deadline: `${taskData.date} ${taskData.time}`,
-            priority: taskData.priority || 'medium',
+            name,
+            description,
+            deadline: `${date} ${time}`,
+            priority,
             status: 'pending',
-            createdAt: now.toISOString(),
-            createdDisplay: now.toLocaleString('en-US', {
-                weekday: 'short',
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            }),
-            completedAt: null,
-            lastReminded: null,
-            lastOverdueReminded: null
+            createdAt: new Date().toISOString(),
+            reminded: false,
+            overdueReminded: false
         };
         
         this.tasks.push(newTask);
-        this.saveTasksToStorage(); // Don't download CSV automatically
+        this.saveAllData();
         this.displayTasks();
-        this.updateStats();
+        this.updateAllStats();
         
-        // Show success message
-        this.showNotification('Task Added', `${newTask.name} has been added successfully!`, 'success');
+        document.getElementById('taskName').value = '';
+        document.getElementById('taskDesc').value = '';
         
-        return newTask;
+        this.showNotification('Task Added', 'Task has been added successfully', 'success');
     }
     
-    completeTask(taskId) {
-        const taskIndex = this.tasks.findIndex(task => task.id === taskId);
-        if (taskIndex === -1) return;
+    handleAddCompany() {
+        const companyData = {
+            name: document.getElementById('companyName').value.trim(),
+            licenseNumber: document.getElementById('licenseNumber').value.trim(),
+            licenseExpiry: document.getElementById('licenseExpiry').value,
+            industry: document.getElementById('companyIndustry').value,
+            address: document.getElementById('companyAddress').value.trim(),
+            whatsapp: document.getElementById('companyWhatsapp').value.trim(),
+            phone: document.getElementById('companyPhone').value.trim(),
+            email: document.getElementById('companyEmail').value.trim(),
+            website: document.getElementById('companyWebsite').value.trim(),
+            contactPerson: document.getElementById('contactPerson').value.trim(),
+            notes: document.getElementById('companyNotes').value.trim()
+        };
         
-        this.tasks[taskIndex].status = 'completed';
-        this.tasks[taskIndex].completedAt = new Date().toISOString();
+        // Validate required fields
+        if (!companyData.name || !companyData.licenseNumber || !companyData.licenseExpiry || 
+            !companyData.address || !companyData.whatsapp) {
+            this.showNotification('Error', 'Please fill all required fields', 'danger');
+            return;
+        }
         
-        // Backup to history
-        this.backupToHistory(this.tasks[taskIndex]);
-        
-        this.saveTasksToStorage(); // Don't download CSV automatically
-        this.displayTasks();
-        this.updateStats();
-        
-        // Show completion notification
-        const taskName = this.tasks[taskIndex].name;
-        this.showNotification('Task Completed', `Great job! "${taskName}" is now complete!`, 'success');
+        this.addCompany(companyData);
+        this.resetCompanyForm();
     }
     
-    deleteTask(taskId) {
-        const taskIndex = this.tasks.findIndex(task => task.id === taskId);
-        if (taskIndex === -1) return;
+    handleScheduleMeeting() {
+        const companyId = parseInt(document.getElementById('meetingCompany').value);
+        const title = document.getElementById('meetingTitle').value.trim();
+        const date = document.getElementById('meetingDate').value;
+        const time = document.getElementById('meetingTime').value;
+        const duration = parseInt(document.getElementById('meetingDuration').value);
+        const buffer = parseInt(document.getElementById('meetingBuffer').value);
+        const platform = document.getElementById('meetingPlatform').value;
+        const link = document.getElementById('meetingLink').value.trim();
+        const agenda = document.getElementById('meetingAgenda').value.trim();
         
-        const taskName = this.tasks[taskIndex].name;
-        this.tasks.splice(taskIndex, 1);
-        this.saveTasksToStorage(); // Don't download CSV automatically
-        this.displayTasks();
-        this.updateStats();
+        // Get required documents
+        const requiredDocs = [];
+        document.querySelectorAll('.doc-required:checked').forEach(cb => {
+            requiredDocs.push(cb.value);
+        });
         
-        this.showNotification('Task Deleted', `"${taskName}" has been removed.`, 'warning');
+        if (!companyId || !title || !date || !time) {
+            this.showNotification('Error', 'Please fill all required fields', 'danger');
+            return;
+        }
+        
+        const meetingData = {
+            companyId,
+            title,
+            dateTime: `${date}T${time}:00`,
+            duration,
+            buffer,
+            platform,
+            link,
+            agenda,
+            requiredDocs,
+            status: 'scheduled'
+        };
+        
+        const meeting = this.scheduleMeeting(meetingData);
+        
+        if (meeting) {
+            // Reset form
+            document.getElementById('meetingTitle').value = '';
+            document.getElementById('meetingLink').value = '';
+            document.getElementById('meetingAgenda').value = '';
+            document.querySelectorAll('.doc-required').forEach(cb => cb.checked = false);
+            document.getElementById('availabilityResult').innerHTML = '';
+        }
     }
     
+    handleCheckAvailability() {
+        const date = document.getElementById('meetingDate').value;
+        const time = document.getElementById('meetingTime').value;
+        const duration = parseInt(document.getElementById('meetingDuration').value);
+        const buffer = parseInt(document.getElementById('meetingBuffer').value);
+        
+        if (!date || !time) {
+            this.showNotification('Error', 'Please select date and time', 'danger');
+            return;
+        }
+        
+        const dateTime = `${date}T${time}:00`;
+        const isAvailable = this.isSlotAvailable(dateTime, duration, buffer);
+        
+        const resultDiv = document.getElementById('availabilityResult');
+        const scheduleBtn = document.getElementById('scheduleMeetingBtn');
+        
+        if (isAvailable) {
+            resultDiv.innerHTML = `
+                <div class="availability-available">
+                    <i class="fas fa-check-circle"></i>
+                    Slot is available!
+                </div>
+            `;
+            scheduleBtn.disabled = false;
+        } else {
+            resultDiv.innerHTML = `
+                <div class="availability-unavailable">
+                    <i class="fas fa-times-circle"></i>
+                    Slot is not available. Please choose another time.
+                </div>
+            `;
+            scheduleBtn.disabled = true;
+        }
+    }
+    
+    handleGenerateSlots() {
+        const date = document.getElementById('slotDate').value;
+        const startTime = document.getElementById('workStart').value;
+        const endTime = document.getElementById('workEnd').value;
+        const duration = parseInt(document.getElementById('slotDuration').value);
+        const breakTime = parseInt(document.getElementById('slotBreak').value);
+        
+        if (!date) {
+            this.showNotification('Error', 'Please select a date', 'danger');
+            return;
+        }
+        
+        const slots = this.generateTimeSlots(date, startTime, endTime, duration, breakTime);
+        
+        const slotsDiv = document.getElementById('generatedSlots');
+        const copyBtn = document.getElementById('copySlotsBtn');
+        
+        slotsDiv.innerHTML = `
+            <h4>Available Slots for ${new Date(date).toLocaleDateString()}:</h4>
+            <div class="slots-grid">
+                ${slots.map(slot => `
+                    <div class="slot-item ${slot.available ? 'available' : 'unavailable'}">
+                        <span class="slot-time">${slot.time}</span>
+                        <span class="slot-status">${slot.available ? '✓' : '✗'}</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+        
+        copyBtn.style.display = 'block';
+        copyBtn.dataset.slots = JSON.stringify(slots.filter(s => s.available));
+    }
+    
+    handleCopySlots() {
+        const slotsData = document.getElementById('copySlotsBtn').dataset.slots;
+        if (!slotsData) return;
+        
+        const slots = JSON.parse(slotsData);
+        const date = document.getElementById('slotDate').value;
+        
+        let message = `Available meeting slots for ${new Date(date).toLocaleDateString()} (UAE Time):\n\n`;
+        slots.forEach(slot => {
+            message += `• ${slot.time} - ${slot.endTime}\n`;
+        });
+        
+        navigator.clipboard.writeText(message).then(() => {
+            this.showNotification('Copied!', 'Slots copied to clipboard', 'success');
+        });
+    }
+    
+    resetCompanyForm() {
+        document.getElementById('companyName').value = '';
+        document.getElementById('licenseNumber').value = '';
+        document.getElementById('licenseExpiry').value = '';
+        document.getElementById('companyIndustry').value = '';
+        document.getElementById('companyAddress').value = '';
+        document.getElementById('companyWhatsapp').value = '';
+        document.getElementById('companyPhone').value = '';
+        document.getElementById('companyEmail').value = '';
+        document.getElementById('companyWebsite').value = '';
+        document.getElementById('contactPerson').value = '';
+        document.getElementById('companyNotes').value = '';
+        document.getElementById('uploadedFiles').innerHTML = '';
+    }
+    
+    handleFileSelect(files, targetType) {
+        const container = document.getElementById('uploadedFiles');
+        container.innerHTML = '';
+        
+        Array.from(files).forEach(file => {
+            const fileDiv = document.createElement('div');
+            fileDiv.className = 'uploaded-file';
+            fileDiv.innerHTML = `
+                <i class="fas fa-file"></i>
+                <span>${file.name}</span>
+                <small>${(file.size / 1024).toFixed(2)} KB</small>
+            `;
+            container.appendChild(fileDiv);
+        });
+    }
+    
+    openDocumentUpload(targetType, targetId) {
+        const modal = document.getElementById('documentModal');
+        const targetSelect = document.getElementById('docTargetId');
+        
+        document.getElementById('docTargetType').value = targetType;
+        
+        targetSelect.innerHTML = '';
+        
+        if (targetType === 'company') {
+            const company = this.companies.find(c => c.id === targetId);
+            if (company) {
+                const option = document.createElement('option');
+                option.value = company.id;
+                option.textContent = company.name;
+                targetSelect.appendChild(option);
+            }
+        } else {
+            const meeting = this.meetings.find(m => m.id === targetId);
+            if (meeting) {
+                const option = document.createElement('option');
+                option.value = meeting.id;
+                option.textContent = meeting.title;
+                targetSelect.appendChild(option);
+            }
+        }
+        
+        modal.classList.add('active');
+        
+        document.getElementById('uploadDocumentsBtn').onclick = () => {
+            const files = document.getElementById('documentFile').files;
+            const docType = document.getElementById('docType').value;
+            
+            Array.from(files).forEach(file => {
+                this.addDocument({
+                    targetType,
+                    targetId,
+                    type: docType
+                }, file).then(() => {
+                    this.showNotification('Uploaded', `${file.name} uploaded successfully`, 'success');
+                });
+            });
+            
+            modal.classList.remove('active');
+            document.getElementById('documentFile').value = '';
+        };
+    }
+    
+    showCompanyDetails(companyId) {
+        const company = this.companies.find(c => c.id === companyId);
+        if (!company) return;
+        
+        const modal = document.getElementById('companyDetailsModal');
+        const content = document.getElementById('companyDetailsContent');
+        
+        const meetings = this.meetings.filter(m => m.companyId === companyId);
+        const documents = this.getDocumentsForTarget('company', companyId);
+        
+        content.innerHTML = `
+            <div class="company-detail-view">
+                <h2>${company.name}</h2>
+                
+                <div class="detail-section">
+                    <h3>License Information</h3>
+                    <p><strong>Number:</strong> ${company.licenseNumber}</p>
+                    <p><strong>Expiry:</strong> ${new Date(company.licenseExpiry).toLocaleDateString()}</p>
+                    <p><strong>Status:</strong> <span class="status-badge status-${company.status}">${company.status}</span></p>
+                </div>
+                
+                <div class="detail-section">
+                    <h3>Contact Information</h3>
+                    <p><strong>Address:</strong> ${company.address}</p>
+                    <p><strong>WhatsApp:</strong> ${company.whatsapp}</p>
+                    ${company.phone ? `<p><strong>Phone:</strong> ${company.phone}</p>` : ''}
+                    ${company.email ? `<p><strong>Email:</strong> ${company.email}</p>` : ''}
+                    ${company.website ? `<p><strong>Website:</strong> <a href="${company.website}" target="_blank">${company.website}</a></p>` : ''}
+                    ${company.contactPerson ? `<p><strong>Contact Person:</strong> ${company.contactPerson}</p>` : ''}
+                </div>
+                
+                ${company.notes ? `
+                <div class="detail-section">
+                    <h3>Notes</h3>
+                    <p>${company.notes}</p>
+                </div>
+                ` : ''}
+                
+                <div class="detail-section">
+                    <h3>Meeting History (${meetings.length})</h3>
+                    ${meetings.length > 0 ? `
+                        <ul class="meeting-list">
+                            ${meetings.slice(-5).map(m => `
+                                <li>
+                                    <strong>${m.title}</strong> - 
+                                    ${new Date(m.dateTime).toLocaleDateString()}
+                                    <span class="status-badge status-${m.status}">${m.status}</span>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    ` : '<p>No meetings scheduled</p>'}
+                </div>
+                
+                <div class="detail-section">
+                    <h3>Documents (${documents.length})</h3>
+                    ${documents.length > 0 ? `
+                        <ul class="document-list">
+                            ${documents.map(d => `
+                                <li>
+                                    <i class="fas fa-file-${d.fileType.includes('pdf') ? 'pdf' : 'image'}"></i>
+                                    <a href="${d.fileData}" download="${d.fileName}">${d.fileName}</a>
+                                    <small>(${(d.fileSize / 1024).toFixed(2)} KB)</small>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    ` : '<p>No documents uploaded</p>'}
+                </div>
+            </div>
+        `;
+        
+        modal.classList.add('active');
+    }
+    
+    showMeetingDetails(meetingId) {
+        const meeting = this.meetings.find(m => m.id === meetingId);
+        if (!meeting) return;
+        
+        const modal = document.getElementById('meetingDetailsModal');
+        const content = document.getElementById('meetingDetailsContent');
+        
+        const company = this.companies.find(c => c.id === meeting.companyId);
+        const documents = this.getDocumentsForTarget('meeting', meetingId);
+        
+        content.innerHTML = `
+            <div class="meeting-detail-view">
+                <h2>${meeting.title}</h2>
+                
+                <div class="detail-section">
+                    <h3>Company</h3>
+                    <p><strong>Name:</strong> ${company ? company.name : 'Unknown'}</p>
+                    <p><strong>License:</strong> ${company ? company.licenseNumber : 'N/A'}</p>
+                </div>
+                
+                <div class="detail-section">
+                    <h3>Meeting Details</h3>
+                    <p><strong>Date & Time:</strong> ${new Date(meeting.dateTime).toLocaleString()} (UAE)</p>
+                    <p><strong>Duration:</strong> ${meeting.duration} minutes</p>
+                    <p><strong>Platform:</strong> ${meeting.platform || 'Not specified'}</p>
+                    ${meeting.link ? `
+                        <p><strong>Link:</strong> <a href="${meeting.link}" target="_blank">Join Meeting</a></p>
+                    ` : ''}
+                    <p><strong>Status:</strong> <span class="status-badge status-${meeting.status}">${meeting.status}</span></p>
+                </div>
+                
+                ${meeting.agenda ? `
+                <div class="detail-section">
+                    <h3>Agenda</h3>
+                    <p>${meeting.agenda}</p>
+                </div>
+                ` : ''}
+                
+                <div class="detail-section">
+                    <h3>Required Documents</h3>
+                    ${meeting.requiredDocs && meeting.requiredDocs.length > 0 ? `
+                        <ul>
+                            ${meeting.requiredDocs.map(doc => `
+                                <li>${doc.charAt(0).toUpperCase() + doc.slice(1)}</li>
+                            `).join('')}
+                        </ul>
+                    ` : '<p>No specific documents required</p>'}
+                </div>
+                
+                <div class="detail-section">
+                    <h3>Uploaded Documents (${documents.length})</h3>
+                    ${documents.length > 0 ? `
+                        <ul class="document-list">
+                            ${documents.map(d => `
+                                <li>
+                                    <i class="fas fa-file"></i>
+                                    <a href="${d.fileData}" download="${d.fileName}">${d.fileName}</a>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    ` : '<p>No documents uploaded</p>'}
+                </div>
+                
+                <div class="button-group">
+                    <button class="btn-primary" onclick="window.businessManager.confirmMeeting(${meetingId}, [])">
+                        <i class="fas fa-check"></i> Confirm Meeting
+                    </button>
+                    <button class="btn-danger" onclick="window.businessManager.cancelMeeting(${meetingId}, 'Cancelled by user')">
+                        <i class="fas fa-times"></i> Cancel Meeting
+                    </button>
+                    <button class="btn-secondary" onclick="window.businessManager.openDocumentUpload('meeting', ${meetingId})">
+                        <i class="fas fa-upload"></i> Upload Documents
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        modal.classList.add('active');
+    }
+    
+    switchToMeetingsTab(companyId) {
+        // Switch to meetings tab
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        
+        document.querySelector('[data-tab="meetings"]').classList.add('active');
+        document.getElementById('meetingsTab').classList.add('active');
+        
+        // Pre-select company
+        document.getElementById('meetingCompany').value = companyId;
+    }
+    
+    openSettingsModal() {
+        const modal = document.getElementById('settingsModal');
+        
+        document.getElementById('reminderTime').value = this.settings.reminderTime;
+        document.getElementById('notificationSound').value = this.settings.notificationSound;
+        document.getElementById('desktopNotifications').checked = this.settings.desktopNotifications;
+        document.getElementById('autoSaveInterval').value = this.settings.autoSaveInterval;
+        document.getElementById('licenseReminders').checked = this.settings.licenseReminders;
+        document.getElementById('defaultWorkStart').value = this.settings.defaultWorkStart;
+        document.getElementById('defaultWorkEnd').value = this.settings.defaultWorkEnd;
+        
+        modal.classList.add('active');
+        
+        // Save settings on change
+        document.getElementById('reminderTime').addEventListener('change', (e) => {
+            this.settings.reminderTime = parseInt(e.target.value);
+            this.saveSettings();
+        });
+        
+        document.getElementById('notificationSound').addEventListener('change', (e) => {
+            this.settings.notificationSound = e.target.value;
+            this.saveSettings();
+        });
+        
+        document.getElementById('desktopNotifications').addEventListener('change', (e) => {
+            this.settings.desktopNotifications = e.target.checked;
+            this.saveSettings();
+        });
+        
+        document.getElementById('autoSaveInterval').addEventListener('change', (e) => {
+            this.settings.autoSaveInterval = parseInt(e.target.value);
+            this.saveSettings();
+            this.setupIntervals();
+        });
+        
+        document.getElementById('licenseReminders').addEventListener('change', (e) => {
+            this.settings.licenseReminders = e.target.checked;
+            this.saveSettings();
+        });
+        
+        document.getElementById('defaultWorkStart').addEventListener('change', (e) => {
+            this.settings.defaultWorkStart = e.target.value;
+            this.saveSettings();
+        });
+        
+        document.getElementById('defaultWorkEnd').addEventListener('change', (e) => {
+            this.settings.defaultWorkEnd = e.target.value;
+            this.saveSettings();
+        });
+        
+        document.getElementById('testSound').onclick = () => {
+            this.playAlertSound();
+        };
+        
+        document.getElementById('exportAllData').onclick = () => {
+            this.exportAllData();
+        };
+        
+        document.getElementById('backupData').onclick = () => {
+            this.saveAllData();
+            this.showNotification('Backup Created', 'All data saved to localStorage', 'success');
+        };
+    }
+    
+    exportCompanies() {
+        const csv = this.convertCompaniesToCSV();
+        this.downloadFile(csv, `companies_export_${new Date().toISOString().split('T')[0]}.csv`);
+    }
+    
+    exportMeetings() {
+        const csv = this.convertMeetingsToCSV();
+        this.downloadFile(csv, `meetings_export_${new Date().toISOString().split('T')[0]}.csv`);
+    }
+    
+    exportAllData() {
+        const data = {
+            tasks: this.tasks,
+            companies: this.companies,
+            meetings: this.meetings,
+            documents: this.documents,
+            exportDate: new Date().toISOString()
+        };
+        
+        const json = JSON.stringify(data, null, 2);
+        this.downloadFile(json, `business_manager_backup_${new Date().toISOString().split('T')[0]}.json`);
+    }
+    
+    convertCompaniesToCSV() {
+        const headers = ['ID', 'Name', 'License Number', 'License Expiry', 'Industry', 'Address', 
+                        'WhatsApp', 'Phone', 'Email', 'Website', 'Contact Person', 'Status', 'Created At'];
+        
+        let csv = headers.join(',') + '\n';
+        
+        this.companies.forEach(c => {
+            const row = [
+                c.id,
+                `"${c.name}"`,
+                `"${c.licenseNumber}"`,
+                c.licenseExpiry,
+                c.industry || '',
+                `"${c.address}"`,
+                `"${c.whatsapp}"`,
+                c.phone || '',
+                c.email || '',
+                c.website || '',
+                `"${c.contactPerson || ''}"`,
+                c.status,
+                c.createdAt
+            ];
+            csv += row.join(',') + '\n';
+        });
+        
+        return csv;
+    }
+    
+    convertMeetingsToCSV() {
+        const headers = ['ID', 'Company ID', 'Company Name', 'Title', 'Date & Time', 'Duration', 
+                        'Buffer', 'Platform', 'Link', 'Status', 'Created At'];
+        
+        let csv = headers.join(',') + '\n';
+        
+        this.meetings.forEach(m => {
+            const row = [
+                m.id,
+                m.companyId,
+                `"${this.getCompanyName(m.companyId)}"`,
+                `"${m.title}"`,
+                m.dateTime,
+                m.duration,
+                m.buffer || 0,
+                m.platform || '',
+                m.link || '',
+                m.status,
+                m.createdAt
+            ];
+            csv += row.join(',') + '\n';
+        });
+        
+        return csv;
+    }
+    
+    downloadFile(content, fileName) {
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        link.click();
+        URL.revokeObjectURL(url);
+    }
+    
+    // Task display functions (existing)
     displayTasks() {
         const container = document.getElementById('tasksContainer');
         if (!container) return;
@@ -348,23 +1814,22 @@ class TaskReminder {
         
         // Apply filter
         if (this.currentFilter === 'pending') {
-            filteredTasks = filteredTasks.filter(task => task.status === 'pending');
+            filteredTasks = filteredTasks.filter(t => t.status === 'pending');
         } else if (this.currentFilter === 'completed') {
-            filteredTasks = filteredTasks.filter(task => task.status === 'completed');
+            filteredTasks = filteredTasks.filter(t => t.status === 'completed');
         } else if (this.currentFilter === 'overdue') {
-            filteredTasks = filteredTasks.filter(task => this.isTaskOverdue(task));
+            filteredTasks = filteredTasks.filter(t => this.isTaskOverdue(t));
         }
         
         // Apply search
-        if (this.searchTerm) {
-            const searchLower = this.searchTerm.toLowerCase();
-            filteredTasks = filteredTasks.filter(task => 
-                task.name.toLowerCase().includes(searchLower) ||
-                (task.description && task.description.toLowerCase().includes(searchLower))
+        if (this.searchTerms.tasks) {
+            const searchLower = this.searchTerms.tasks.toLowerCase();
+            filteredTasks = filteredTasks.filter(t => 
+                t.name.toLowerCase().includes(searchLower) ||
+                (t.description && t.description.toLowerCase().includes(searchLower))
             );
         }
         
-        // Clear container
         container.innerHTML = '';
         
         if (filteredTasks.length === 0) {
@@ -372,27 +1837,16 @@ class TaskReminder {
                 <div class="empty-state">
                     <i class="fas fa-clipboard-list fa-3x"></i>
                     <h3>No Tasks Found</h3>
-                    <p>${this.searchTerm ? 'Try a different search term' : 'Add your first task using the form'}</p>
                 </div>
             `;
             return;
         }
         
-        // Sort tasks: overdue first, then by deadline
-        filteredTasks.sort((a, b) => {
-            const aOverdue = this.isTaskOverdue(a);
-            const bOverdue = this.isTaskOverdue(b);
-            
-            if (aOverdue && !bOverdue) return -1;
-            if (!aOverdue && bOverdue) return 1;
-            
-            return new Date(a.deadline) - new Date(b.deadline);
-        });
+        filteredTasks.sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
         
-        // Create task elements
         filteredTasks.forEach(task => {
-            const taskElement = this.createTaskElement(task);
-            container.appendChild(taskElement);
+            const element = this.createTaskElement(task);
+            container.appendChild(element);
         });
     }
     
@@ -412,20 +1866,7 @@ class TaskReminder {
         } else if (hoursLeft > 0) {
             timeLeftText = `${hoursLeft}h ${minutesLeft}m left`;
         } else {
-            timeLeftText = `${minutesLeft} minutes left`;
-        }
-        
-        // Format creation time
-        let createdAtDisplay = task.createdDisplay;
-        if (!createdAtDisplay && task.createdAt) {
-            const createdDate = new Date(task.createdAt);
-            createdAtDisplay = createdDate.toLocaleString('en-US', {
-                weekday: 'short',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
+            timeLeftText = `${minutesLeft}m left`;
         }
         
         div.innerHTML = `
@@ -439,1084 +1880,75 @@ class TaskReminder {
             <div class="task-meta">
                 <div class="meta-item">
                     <i class="fas fa-calendar-plus"></i>
-                    <span>Created: ${createdAtDisplay || 'N/A'}</span>
+                    <span>Created: ${this.formatUAEDate(task.createdAt)}</span>
                 </div>
                 <div class="meta-item">
                     <i class="fas fa-clock"></i>
-                    <span>Due: ${this.formatDateTime(task.deadline)}</span>
+                    <span>Due: ${this.formatUAEDate(task.deadline)}</span>
                 </div>
-                ${task.completedAt ? `
-                <div class="meta-item">
-                    <i class="fas fa-check-circle"></i>
-                    <span>Completed: ${this.formatDateTime(task.completedAt)}</span>
-                </div>
-                ` : ''}
             </div>
             <div class="task-footer">
                 <div class="task-due ${timeDiff < 0 ? 'overdue' : ''}">
                     <i class="fas fa-hourglass-half"></i>
-                    <span class="time-left">${timeLeftText}</span>
+                    <span>${timeLeftText}</span>
                 </div>
                 <div class="task-actions">
                     ${task.status === 'pending' ? `
-                        <button class="action-btn complete" data-id="${task.id}" title="Mark Complete">
+                        <button class="action-btn complete" data-id="${task.id}" title="Complete">
                             <i class="fas fa-check"></i>
                         </button>
-                        <button class="action-btn edit" data-id="${task.id}" title="Edit Task">
-                            <i class="fas fa-edit"></i>
-                        </button>
                     ` : ''}
-                    <button class="action-btn delete" data-id="${task.id}" title="Delete Task">
+                    <button class="action-btn delete" data-id="${task.id}" title="Delete">
                         <i class="fas fa-trash"></i>
-                    </button>
-                    <button class="action-btn info" data-id="${task.id}" title="Task Details">
-                        <i class="fas fa-info-circle"></i>
                     </button>
                 </div>
             </div>
         `;
+        
+        div.querySelector('.complete')?.addEventListener('click', () => {
+            this.completeTask(task.id);
+        });
+        
+        div.querySelector('.delete').addEventListener('click', () => {
+            if (confirm('Delete this task?')) {
+                this.deleteTask(task.id);
+            }
+        });
         
         return div;
     }
     
     isTaskOverdue(task) {
-        if (task.status === 'completed') return false;
-        return new Date(task.deadline) < new Date();
+        return task.status === 'pending' && new Date(task.deadline) < new Date();
     }
     
-    formatDateTime(dateTimeStr) {
-        try {
-            const date = new Date(dateTimeStr);
-            if (isNaN(date.getTime())) return 'Invalid date';
-            
-            return date.toLocaleString('en-US', {
-                weekday: 'short',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-        } catch (error) {
-            return 'Invalid date';
-        }
-    }
-    
-    updateStats() {
-        const total = this.tasks.length;
-        const pending = this.tasks.filter(task => task.status === 'pending').length;
-        const completed = this.tasks.filter(task => task.status === 'completed').length;
-        const overdue = this.tasks.filter(task => this.isTaskOverdue(task)).length;
-        
-        document.getElementById('totalTasks').textContent = total;
-        document.getElementById('pendingTasks').textContent = pending;
-        document.getElementById('completedTasks').textContent = completed;
-        document.getElementById('taskStats').textContent = `${total} Tasks (${pending} pending, ${overdue} overdue)`;
-    }
-    
-    updateLastSaved() {
-        const lastSave = localStorage.getItem('taskReminderLastSave');
-        let timeStr = 'Never saved';
-        
-        if (lastSave) {
-            const lastSaveDate = new Date(lastSave);
-            timeStr = lastSaveDate.toLocaleTimeString('en-US', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            });
-            timeStr = `Last saved: ${timeStr}`;
-        }
-        
-        document.getElementById('lastSaved').textContent = timeStr;
-    }
-    
-    checkDueTasks() {
-        const now = new Date();
-        const reminderMinutes = this.settings.reminderTime;
-        
-        this.tasks.forEach(task => {
-            if (task.status === 'pending') {
-                const deadline = new Date(task.deadline);
-                const timeDiff = deadline - now;
-                const minutesDiff = timeDiff / (1000 * 60);
-                
-                // Check if task is due within reminder time
-                if (minutesDiff > 0 && minutesDiff <= reminderMinutes) {
-                    this.sendReminder(task, minutesDiff);
-                }
-                
-                // Check if overdue
-                if (timeDiff < 0) {
-                    this.sendOverdueReminder(task);
-                }
-            }
-        });
-    }
-    
-    sendReminder(task, minutesLeft) {
-        // Skip if already reminded recently
-        if (task.lastReminded && (Date.now() - task.lastReminded) < 60000) {
-            return;
-        }
-        
-        task.lastReminded = Date.now();
-        this.saveTasksToStorage(); // Update storage
-        
-        // Browser notification
-        if (this.settings.desktopNotifications && this.notificationPermission) {
-            const notification = new Notification(`⏰ Task Due Soon: ${task.name}`, {
-                body: `Due in ${Math.floor(minutesLeft)} minutes: ${task.description || 'No description'}`,
-                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">⏰</text></svg>',
-                tag: `task-reminder-${task.id}`,
-                requireInteraction: true
-            });
-            
-            notification.onclick = () => {
-                window.focus();
-                this.showNotificationPanel();
-            };
-        }
-        
-        // Sound alert
-        this.playAlertSound();
-        
-        // Add to notification panel
-        this.addToNotificationPanel(
-            `Task Due Soon: ${task.name}`,
-            `Due in ${Math.floor(minutesLeft)} minutes`,
-            'warning'
-        );
-    }
-    
-    sendOverdueReminder(task) {
-        // Skip if already reminded recently
-        if (task.lastOverdueReminded && (Date.now() - task.lastOverdueReminded) < 300000) { // 5 minutes
-            return;
-        }
-        
-        task.lastOverdueReminded = Date.now();
-        this.saveTasksToStorage(); // Update storage
-        
-        // Browser notification
-        if (this.settings.desktopNotifications && this.notificationPermission) {
-            const notification = new Notification(`⚠️ Task Overdue: ${task.name}`, {
-                body: `Task was due ${this.formatDateTime(task.deadline)}`,
-                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">⚠️</text></svg>',
-                tag: `task-overdue-${task.id}`,
-                requireInteraction: true
-            });
-            
-            notification.onclick = () => {
-                window.focus();
-                // Focus on the overdue task
-                this.currentFilter = 'overdue';
-                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-                document.querySelector('[data-filter="overdue"]').classList.add('active');
-                this.displayTasks();
-            };
-        }
-        
-        // Sound alert
-        this.playAlertSound();
-        
-        // Add to notification panel
-        this.addToNotificationPanel(
-            `Task Overdue: ${task.name}`,
-            `Was due ${this.formatDateTime(task.deadline)}`,
-            'danger'
-        );
-    }
-    
-    playAlertSound() {
-        if (this.settings.notificationSound === 'none') return;
-        
-        const soundId = `alertSound${this.settings.notificationSound.charAt(5)}`;
-        const audio = document.getElementById(soundId);
-        if (audio) {
-            audio.currentTime = 0;
-            audio.play().catch(e => console.log('Audio play failed:', e));
-        }
-    }
-    
-    addToNotificationPanel(title, message, type = 'info') {
-        const panel = document.getElementById('notificationsList');
-        if (!panel) return;
-        
-        const notification = document.createElement('div');
-        notification.className = `notification-item ${type}`;
-        notification.innerHTML = `
-            <strong>${title}</strong>
-            <p>${message}</p>
-            <div class="notification-time">${new Date().toLocaleTimeString()}</div>
-        `;
-        
-        panel.insertBefore(notification, panel.firstChild);
-        
-        // Limit to 10 notifications
-        while (panel.children.length > 10) {
-            panel.removeChild(panel.lastChild);
-        }
-        
-        // Show panel if hidden
-        this.showNotificationPanel();
-    }
-    
-    showNotificationPanel() {
-        const panel = document.getElementById('notificationPanel');
-        if (panel) {
-            panel.style.display = 'block';
-            setTimeout(() => {
-                panel.style.display = 'none';
-            }, 10000); // Hide after 10 seconds
-        }
-    }
-    
-    async requestNotificationPermission() {
-        if ('Notification' in window) {
-            if (Notification.permission === 'default') {
-                try {
-                    const permission = await Notification.requestPermission();
-                    this.notificationPermission = permission === 'granted';
-                    this.updateReminderStatus();
-                } catch (error) {
-                    console.error('Error requesting notification permission:', error);
-                }
-            } else {
-                this.notificationPermission = Notification.permission === 'granted';
-                this.updateReminderStatus();
-            }
-        }
-    }
-    
-    updateReminderStatus() {
-        const statusEl = document.getElementById('reminderStatus');
-        const toggleBtn = document.getElementById('notificationToggle');
-        
-        if (this.notificationPermission) {
-            statusEl.innerHTML = '<i class="fas fa-bell"></i> Reminders: On';
-            statusEl.style.background = '#d4edda';
-            statusEl.style.color = '#155724';
-            toggleBtn.innerHTML = '<i class="fas fa-bell-slash"></i> Disable Notifications';
-        } else {
-            statusEl.innerHTML = '<i class="fas fa-bell-slash"></i> Reminders: Off';
-            statusEl.style.background = '#f8d7da';
-            statusEl.style.color = '#721c24';
-            toggleBtn.innerHTML = '<i class="fas fa-bell"></i> Enable Notifications';
-        }
-    }
-    
-    generateAIPrompt(taskId, problemType, problemDesc, triedSolutions) {
+    completeTask(taskId) {
         const task = this.tasks.find(t => t.id === taskId);
-        if (!task) return '';
-        
-        const problemTypes = {
-            technical: 'Technical Issue',
-            time: 'Time Management',
-            understanding: 'Understanding the Task',
-            resources: 'Lack of Resources',
-            motivation: 'Motivation/Procrastination',
-            other: 'Other'
-        };
-        
-        return `I need help with completing a task. Here are the details:
-
-TASK: ${task.name}
-DESCRIPTION: ${task.description || 'No description provided'}
-CREATED: ${task.createdDisplay || this.formatDateTime(task.createdAt)}
-DEADLINE: ${this.formatDateTime(task.deadline)}
-PRIORITY: ${task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
-CURRENT STATUS: ${task.status}
-
-PROBLEM TYPE: ${problemTypes[problemType] || 'Other'}
-SPECIFIC ISSUE: ${problemDesc}
-ATTEMPTED SOLUTIONS: ${triedSolutions}
-
-Please provide:
-1. Step-by-step solution approach
-2. Recommended resources/tools
-3. Time management strategy for this task
-4. Alternative approaches if the main solution doesn't work
-5. Common pitfalls to avoid
-
-Keep the response practical and actionable.`;
-    }
-    
-    setupIntervals() {
-        // Clear existing intervals
-        if (this.reminderInterval) clearInterval(this.reminderInterval);
-        if (this.autoSaveInterval) clearInterval(this.autoSaveInterval);
-        
-        // Setup reminder check interval (every minute)
-        this.reminderInterval = setInterval(() => {
-            this.checkDueTasks();
-        }, 60000); // 1 minute
-        
-        // Setup auto-save interval
-        const saveMinutes = this.settings.autoSaveInterval * 60000;
-        this.autoSaveInterval = setInterval(() => {
-            this.saveTasksToStorage(); // Don't download, just save to localStorage
-            this.showNotification('Auto-save', 'Tasks have been auto-saved.', 'info');
-        }, saveMinutes);
-    }
-    
-    initEventListeners() {
-        // Add task button
-        document.getElementById('addTaskBtn').addEventListener('click', () => {
-            this.handleAddTask();
-        });
-        
-        // Priority buttons
-        document.querySelectorAll('.priority-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                document.querySelectorAll('.priority-btn').forEach(b => b.classList.remove('active'));
-                e.currentTarget.classList.add('active');
-            });
-        });
-        
-        // Quick add buttons
-        document.getElementById('quickToday').addEventListener('click', () => {
-            const today = new Date();
-            today.setHours(18, 0, 0); // Set to 6 PM today
-            document.getElementById('taskDate').value = today.toISOString().split('T')[0];
-            document.getElementById('taskTime').value = '18:00';
-        });
-        
-        document.getElementById('quickTomorrow').addEventListener('click', () => {
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            tomorrow.setHours(18, 0, 0);
-            document.getElementById('taskDate').value = tomorrow.toISOString().split('T')[0];
-            document.getElementById('taskTime').value = '18:00';
-        });
-        
-        document.getElementById('quickWeek').addEventListener('click', () => {
-            const nextWeek = new Date();
-            nextWeek.setDate(nextWeek.getDate() + 7);
-            nextWeek.setHours(18, 0, 0);
-            document.getElementById('taskDate').value = nextWeek.toISOString().split('T')[0];
-            document.getElementById('taskTime').value = '18:00';
-        });
-        
-        // Task actions (delegated)
-        document.getElementById('tasksContainer').addEventListener('click', (e) => {
-            const target = e.target.closest('.action-btn');
-            if (!target) return;
-            
-            const taskId = parseInt(target.dataset.id);
-            
-            if (target.classList.contains('complete')) {
-                this.completeTask(taskId);
-            } else if (target.classList.contains('delete')) {
-                if (confirm('Are you sure you want to delete this task?')) {
-                    this.deleteTask(taskId);
-                }
-            } else if (target.classList.contains('edit')) {
-                this.editTask(taskId);
-            } else if (target.classList.contains('info')) {
-                this.showTaskDetails(taskId);
-            }
-        });
-        
-        // Filter buttons
-        document.querySelectorAll('.filter-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-                e.currentTarget.classList.add('active');
-                this.currentFilter = e.currentTarget.dataset.filter;
-                this.displayTasks();
-            });
-        });
-        
-        // Search input
-        document.getElementById('taskSearch').addEventListener('input', (e) => {
-            this.searchTerm = e.target.value;
+        if (task) {
+            task.status = 'completed';
+            task.completedAt = new Date().toISOString();
+            this.saveAllData();
             this.displayTasks();
-        });
-        
-        // Refresh button
-        document.getElementById('refreshTasks').addEventListener('click', () => {
-            this.loadTasksFromCSV();
-            this.displayTasks();
-            this.showNotification('Refreshed', 'Task list has been refreshed.', 'info');
-        });
-        
-        // Settings button
-        document.getElementById('settingsBtn').addEventListener('click', () => {
-            this.openSettingsModal();
-        });
-        
-        // Export button - now explicitly downloads CSV
-        document.getElementById('exportBtn').addEventListener('click', async () => {
-            await this.saveTasksToStorage(true); // true = download CSV
-            this.showNotification('Export Complete', 'Tasks have been exported to CSV file.', 'success');
-        });
-        
-        // History button
-        document.getElementById('historyBtn').addEventListener('click', () => {
-            this.showHistory();
-        });
-        
-        // Notification toggle
-        document.getElementById('notificationToggle').addEventListener('click', () => {
-            this.toggleNotifications();
-        });
-        
-        // Help generator
-        document.getElementById('generateHelpBtn').addEventListener('click', () => {
-            this.openHelpModal();
-        });
-        
-        // Clear notifications
-        document.getElementById('clearNotifications')?.addEventListener('click', () => {
-            document.getElementById('notificationsList').innerHTML = '';
-        });
-        
-        // Modal close buttons
-        document.querySelectorAll('.modal-close').forEach(btn => {
-            btn.addEventListener('click', () => {
-                btn.closest('.modal').classList.remove('active');
-            });
-        });
-        
-        // Close modal when clicking outside
-        document.querySelectorAll('.modal').forEach(modal => {
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    modal.classList.remove('active');
-                }
-            });
-        });
-        
-        // Prevent page refresh from triggering downloads
-        window.addEventListener('beforeunload', (e) => {
-            // Save to localStorage before leaving
-            this.saveTasksToStorage(false);
-        });
-    }
-    
-    handleAddTask() {
-        const name = document.getElementById('taskName').value.trim();
-        const description = document.getElementById('taskDesc').value.trim();
-        const date = document.getElementById('taskDate').value;
-        const time = document.getElementById('taskTime').value;
-        const priority = document.querySelector('.priority-btn.active').dataset.priority;
-        
-        if (!name) {
-            this.showNotification('Error', 'Task name is required!', 'danger');
-            return;
-        }
-        
-        if (!date || !time) {
-            this.showNotification('Error', 'Please set a deadline!', 'danger');
-            return;
-        }
-        
-        const taskData = { name, description, date, time, priority };
-        this.addTask(taskData);
-        
-        // Clear form
-        document.getElementById('taskName').value = '';
-        document.getElementById('taskDesc').value = '';
-        document.getElementById('taskDate').value = '';
-        document.getElementById('taskTime').value = '18:00';
-        
-        // Reset priority to medium
-        document.querySelectorAll('.priority-btn').forEach(b => b.classList.remove('active'));
-        document.querySelector('.priority-btn.medium').classList.add('active');
-        
-        // Focus back on task name
-        document.getElementById('taskName').focus();
-    }
-    
-    openSettingsModal() {
-        const modal = document.getElementById('settingsModal');
-        document.getElementById('reminderTime').value = this.settings.reminderTime;
-        document.getElementById('notificationSound').value = this.settings.notificationSound;
-        document.getElementById('desktopNotifications').checked = this.settings.desktopNotifications;
-        document.getElementById('autoSaveInterval').value = this.settings.autoSaveInterval;
-        
-        // Add auto-download CSV option
-        const autoDownloadCheckbox = document.createElement('label');
-        autoDownloadCheckbox.innerHTML = `
-            <input type="checkbox" id="autoDownloadCSV" ${this.settings.autoDownloadCSV ? 'checked' : ''}>
-            Auto-download CSV on save (not recommended)
-        `;
-        
-        const settingsSection = document.querySelector('.settings-section:nth-child(2)');
-        if (settingsSection && !document.getElementById('autoDownloadCSV')) {
-            const formGroup = document.createElement('div');
-            formGroup.className = 'form-group';
-            formGroup.innerHTML = `
-                <label>
-                    <input type="checkbox" id="autoDownloadCSV" ${this.settings.autoDownloadCSV ? 'checked' : ''}>
-                    Auto-download CSV on save (not recommended)
-                </label>
-                <small style="display:block;color:#666;margin-top:5px;">
-                    When checked, CSV will download every time you save. Leave unchecked for better experience.
-                </small>
-            `;
-            settingsSection.appendChild(formGroup);
-        }
-        
-        // Test sound button
-        document.getElementById('testSound').addEventListener('click', () => {
-            this.playAlertSound();
-        });
-        
-        // Save settings button
-        document.getElementById('exportCSV').addEventListener('click', async () => {
-            await this.saveTasksToStorage(true); // Download CSV
-            this.showNotification('Export Complete', 'Tasks exported to CSV file.', 'success');
-        });
-        
-        // Import CSV
-        document.getElementById('importCSV').addEventListener('click', () => {
-            this.importCSV();
-        });
-        
-        // Backup button
-        document.getElementById('backupTasks').addEventListener('click', async () => {
-            await this.saveTasksToStorage(true); // Download CSV
-            this.showNotification('Backup Created', 'Tasks have been backed up to CSV.', 'success');
-        });
-        
-        // Save settings on change
-        document.getElementById('reminderTime').addEventListener('change', (e) => {
-            this.settings.reminderTime = parseInt(e.target.value);
-            this.saveSettings();
-            this.setupIntervals();
-        });
-        
-        document.getElementById('notificationSound').addEventListener('change', (e) => {
-            this.settings.notificationSound = e.target.value;
-            this.saveSettings();
-        });
-        
-        document.getElementById('desktopNotifications').addEventListener('change', (e) => {
-            this.settings.desktopNotifications = e.target.checked;
-            this.saveSettings();
-        });
-        
-        document.getElementById('autoSaveInterval').addEventListener('change', (e) => {
-            this.settings.autoSaveInterval = parseInt(e.target.value);
-            this.saveSettings();
-            this.setupIntervals();
-        });
-        
-        // Auto-download CSV setting
-        document.getElementById('autoDownloadCSV').addEventListener('change', (e) => {
-            this.settings.autoDownloadCSV = e.target.checked;
-            this.saveSettings();
-        });
-        
-        modal.classList.add('active');
-    }
-    
-    openHelpModal() {
-        const modal = document.getElementById('helpModal');
-        const taskSelect = document.getElementById('helpTaskSelect');
-        
-        // Populate task select with pending tasks
-        taskSelect.innerHTML = '<option value="">Select a task...</option>';
-        this.tasks
-            .filter(task => task.status === 'pending')
-            .forEach(task => {
-                const option = document.createElement('option');
-                option.value = task.id;
-                option.textContent = `${task.name} (Due: ${this.formatDateTime(task.deadline)})`;
-                taskSelect.appendChild(option);
-            });
-        
-        // Clear previous prompt
-        document.getElementById('promptResult').style.display = 'none';
-        
-        // Generate prompt button
-        document.getElementById('generatePromptBtn').onclick = () => {
-            const taskId = parseInt(taskSelect.value);
-            const problemType = document.getElementById('problemType').value;
-            const problemDesc = document.getElementById('problemDesc').value.trim();
-            const triedSolutions = document.getElementById('triedSolutions').value.trim();
-            
-            if (!taskId || !problemDesc) {
-                this.showNotification('Error', 'Please select a task and describe the problem.', 'danger');
-                return;
-            }
-            
-            const prompt = this.generateAIPrompt(taskId, problemType, problemDesc, triedSolutions);
-            document.getElementById('generatedPrompt').value = prompt;
-            document.getElementById('promptResult').style.display = 'block';
-            
-            // Scroll to result
-            document.getElementById('promptResult').scrollIntoView({ behavior: 'smooth' });
-        };
-        
-        // Copy to clipboard
-        document.getElementById('copyPrompt').onclick = () => {
-            const promptText = document.getElementById('generatedPrompt').value;
-            navigator.clipboard.writeText(promptText).then(() => {
-                this.showNotification('Copied!', 'Prompt copied to clipboard.', 'success');
-            });
-        };
-        
-        // Save as file
-        document.getElementById('savePrompt').onclick = () => {
-            const promptText = document.getElementById('generatedPrompt').value;
-            const taskId = document.getElementById('helpTaskSelect').value;
-            const blob = new Blob([promptText], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `ai_help_task_${taskId}_${Date.now()}.txt`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            setTimeout(() => URL.revokeObjectURL(url), 100);
-            
-            this.showNotification('Saved', 'Prompt saved as text file.', 'success');
-        };
-        
-        // Use with AI button
-        document.getElementById('useWithAI').onclick = () => {
-            this.showNotification('Ready', 'Prompt is ready! Copy and paste it to your AI assistant.', 'info');
-        };
-        
-        modal.classList.add('active');
-    }
-    
-    importCSV() {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.csv,.txt';
-        
-        input.onchange = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            
-            const reader = new FileReader();
-            
-            reader.onload = (event) => {
-                try {
-                    const csvText = event.target.result;
-                    this.parseCSV(csvText);
-                    this.saveTasksToStorage(false); // Save to localStorage
-                    this.displayTasks();
-                    this.updateStats();
-                    this.showNotification('Import Successful', `${this.tasks.length} tasks imported from CSV.`, 'success');
-                } catch (error) {
-                    this.showNotification('Import Failed', 'Error reading CSV file.', 'danger');
-                    console.error('CSV import error:', error);
-                }
-            };
-            
-            reader.onerror = () => {
-                this.showNotification('Import Failed', 'Error reading file.', 'danger');
-            };
-            
-            reader.readAsText(file);
-        };
-        
-        input.click();
-    }
-    
-    editTask(taskId) {
-        const task = this.tasks.find(t => t.id === taskId);
-        if (!task) return;
-        
-        // Create edit modal
-        const editModal = document.createElement('div');
-        editModal.className = 'modal active';
-        editModal.innerHTML = `
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2><i class="fas fa-edit"></i> Edit Task</h2>
-                    <button class="modal-close">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label>Task Name:</label>
-                        <input type="text" id="editTaskName" class="form-control" value="${task.name.replace(/"/g, '&quot;')}">
-                    </div>
-                    <div class="form-group">
-                        <label>Description:</label>
-                        <textarea id="editTaskDesc" class="form-control" rows="3">${task.description || ''}</textarea>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Due Date:</label>
-                            <input type="date" id="editTaskDate" class="form-control" 
-                                   value="${task.deadline.split(' ')[0]}">
-                        </div>
-                        <div class="form-group">
-                            <label>Time:</label>
-                            <input type="time" id="editTaskTime" class="form-control" 
-                                   value="${task.deadline.split(' ')[1] || '18:00'}">
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Priority:</label>
-                        <select id="editTaskPriority" class="form-control">
-                            <option value="low" ${task.priority === 'low' ? 'selected' : ''}>Low</option>
-                            <option value="medium" ${task.priority === 'medium' ? 'selected' : ''}>Medium</option>
-                            <option value="high" ${task.priority === 'high' ? 'selected' : ''}>High</option>
-                        </select>
-                    </div>
-                    <button id="saveEditBtn" class="btn-primary btn-large">
-                        <i class="fas fa-save"></i> Save Changes
-                    </button>
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(editModal);
-        
-        // Close modal
-        editModal.querySelector('.modal-close').addEventListener('click', () => {
-            editModal.remove();
-        });
-        
-        editModal.addEventListener('click', (e) => {
-            if (e.target === editModal) {
-                editModal.remove();
-            }
-        });
-        
-        // Save changes
-        editModal.querySelector('#saveEditBtn').addEventListener('click', () => {
-            const newName = document.getElementById('editTaskName').value.trim();
-            const newDesc = document.getElementById('editTaskDesc').value.trim();
-            const newDate = document.getElementById('editTaskDate').value;
-            const newTime = document.getElementById('editTaskTime').value;
-            const newPriority = document.getElementById('editTaskPriority').value;
-            
-            if (!newName) {
-                this.showNotification('Error', 'Task name cannot be empty!', 'danger');
-                return;
-            }
-            
-            task.name = newName;
-            task.description = newDesc;
-            task.deadline = `${newDate} ${newTime}`;
-            task.priority = newPriority;
-            
-            this.saveTasksToStorage(false);
-            this.displayTasks();
-            editModal.remove();
-            
-            this.showNotification('Task Updated', 'Task has been updated successfully.', 'success');
-        });
-    }
-    
-    showTaskDetails(taskId) {
-        const task = this.tasks.find(t => t.id === taskId);
-        if (!task) return;
-        
-        const detailsModal = document.createElement('div');
-        detailsModal.className = 'modal active';
-        
-        const createdDate = new Date(task.createdAt);
-        const dueDate = new Date(task.deadline);
-        const completedDate = task.completedAt ? new Date(task.completedAt) : null;
-        
-        detailsModal.innerHTML = `
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2><i class="fas fa-info-circle"></i> Task Details</h2>
-                    <button class="modal-close">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <div class="task-detail-card">
-                        <h3>${task.name}</h3>
-                        ${task.description ? `<p class="detail-desc">${task.description}</p>` : ''}
-                        
-                        <div class="detail-grid">
-                            <div class="detail-item">
-                                <strong><i class="fas fa-hashtag"></i> Task ID:</strong>
-                                <span>${task.id}</span>
-                            </div>
-                            <div class="detail-item">
-                                <strong><i class="fas fa-flag"></i> Priority:</strong>
-                                <span class="priority-badge priority-${task.priority}">
-                                    ${task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
-                                </span>
-                            </div>
-                            <div class="detail-item">
-                                <strong><i class="fas fa-hourglass-half"></i> Status:</strong>
-                                <span class="status-badge status-${task.status}">
-                                    ${task.status.charAt(0).toUpperCase() + task.status.slice(1)}
-                                </span>
-                            </div>
-                            <div class="detail-item">
-                                <strong><i class="fas fa-calendar-plus"></i> Created:</strong>
-                                <span>${createdDate.toLocaleString()}</span>
-                            </div>
-                            <div class="detail-item">
-                                <strong><i class="fas fa-clock"></i> Due:</strong>
-                                <span>${dueDate.toLocaleString()}</span>
-                            </div>
-                            ${completedDate ? `
-                            <div class="detail-item">
-                                <strong><i class="fas fa-check-circle"></i> Completed:</strong>
-                                <span>${completedDate.toLocaleString()}</span>
-                            </div>
-                            ` : ''}
-                            <div class="detail-item">
-                                <strong><i class="fas fa-history"></i> Age:</strong>
-                                <span>${this.getTimeDifference(createdDate, new Date())}</span>
-                            </div>
-                            ${task.status === 'pending' ? `
-                            <div class="detail-item">
-                                <strong><i class="fas fa-hourglass-end"></i> Time Left:</strong>
-                                <span>${this.getTimeDifference(new Date(), dueDate)}</span>
-                            </div>
-                            ` : ''}
-                        </div>
-                        
-                        ${task.lastReminded ? `
-                        <div class="detail-note">
-                            <i class="fas fa-bell"></i>
-                            <span>Last reminded: ${new Date(task.lastReminded).toLocaleString()}</span>
-                        </div>
-                        ` : ''}
-                        
-                        ${task.lastOverdueReminded ? `
-                        <div class="detail-note">
-                            <i class="fas fa-exclamation-triangle"></i>
-                            <span>Last overdue reminder: ${new Date(task.lastOverdueReminded).toLocaleString()}</span>
-                        </div>
-                        ` : ''}
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(detailsModal);
-        
-        // Close modal
-        detailsModal.querySelector('.modal-close').addEventListener('click', () => {
-            detailsModal.remove();
-        });
-        
-        detailsModal.addEventListener('click', (e) => {
-            if (e.target === detailsModal) {
-                detailsModal.remove();
-            }
-        });
-    }
-    
-    getTimeDifference(start, end) {
-        const diff = Math.abs(end - start);
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        
-        if (days > 0) return `${days}d ${hours}h`;
-        if (hours > 0) return `${hours}h ${minutes}m`;
-        return `${minutes} minutes`;
-    }
-    
-    toggleNotifications() {
-        if (this.notificationPermission) {
-            this.notificationPermission = false;
-            this.showNotification('Notifications Disabled', 'Browser notifications have been turned off.', 'warning');
-        } else {
-            this.requestNotificationPermission();
-        }
-        this.updateReminderStatus();
-    }
-    
-    showHistory() {
-        try {
-            const history = JSON.parse(localStorage.getItem('taskHistory') || '[]');
-            
-            if (history.length === 0) {
-                this.showNotification('History', 'No completed tasks in history yet.', 'info');
-                return;
-            }
-            
-            // Create history modal
-            const historyModal = document.createElement('div');
-            historyModal.className = 'modal active';
-            
-            let historyHTML = '<h3><i class="fas fa-history"></i> Completed Tasks History</h3>';
-            historyHTML += `<p>Total completed tasks: ${history.length}</p>`;
-            historyHTML += '<div class="history-list">';
-            
-            history.slice(-20).reverse().forEach((task, index) => {
-                const completedDate = task.completedAt ? new Date(task.completedAt) : null;
-                const createdDate = new Date(task.createdAt);
-                
-                historyHTML += `
-                    <div class="history-item">
-                        <div class="history-header">
-                            <span class="history-index">${history.length - index}.</span>
-                            <strong>${task.name}</strong>
-                            <span class="history-date">
-                                ${completedDate ? completedDate.toLocaleDateString() : 'Unknown'}
-                            </span>
-                        </div>
-                        <div class="history-details">
-                            <span>Created: ${createdDate.toLocaleDateString()}</span>
-                            <span>Priority: ${task.priority}</span>
-                            <span>Completion Time: ${this.getTimeDifference(createdDate, completedDate || new Date())}</span>
-                        </div>
-                    </div>
-                `;
-            });
-            
-            historyHTML += '</div>';
-            
-            historyModal.innerHTML = `
-                <div class="modal-content large-modal">
-                    <div class="modal-header">
-                        <h2><i class="fas fa-history"></i> Task History</h2>
-                        <button class="modal-close">&times;</button>
-                    </div>
-                    <div class="modal-body">
-                        ${historyHTML}
-                        <div class="button-group">
-                            <button id="exportHistoryBtn" class="btn-secondary">
-                                <i class="fas fa-file-export"></i> Export History
-                            </button>
-                            <button id="clearHistoryBtn" class="btn-danger">
-                                <i class="fas fa-trash"></i> Clear History
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            document.body.appendChild(historyModal);
-            
-            // Close modal
-            historyModal.querySelector('.modal-close').addEventListener('click', () => {
-                historyModal.remove();
-            });
-            
-            historyModal.addEventListener('click', (e) => {
-                if (e.target === historyModal) {
-                    historyModal.remove();
-                }
-            });
-            
-            // Export history
-            historyModal.querySelector('#exportHistoryBtn').addEventListener('click', () => {
-                this.exportHistory();
-                historyModal.remove();
-            });
-            
-            // Clear history
-            historyModal.querySelector('#clearHistoryBtn').addEventListener('click', () => {
-                if (confirm('Are you sure you want to clear all history? This cannot be undone.')) {
-                    localStorage.removeItem('taskHistory');
-                    localStorage.removeItem('taskHistoryCSV');
-                    this.showNotification('History Cleared', 'All history has been deleted.', 'warning');
-                    historyModal.remove();
-                }
-            });
-            
-        } catch (error) {
-            this.showNotification('History Error', 'Could not load history.', 'danger');
-            console.error('History error:', error);
+            this.showNotification('Task Completed', 'Great job!', 'success');
         }
     }
     
-    exportHistory() {
-        try {
-            const history = JSON.parse(localStorage.getItem('taskHistory') || '[]');
-            
-            if (history.length === 0) {
-                this.showNotification('Export Failed', 'No history to export.', 'warning');
-                return;
-            }
-            
-            let csvContent = 'ID,Name,Description,Deadline,Priority,CreatedAt,CompletedAt,ArchivedAt\n';
-            
-            history.forEach(task => {
-                const row = [
-                    task.id,
-                    `"${(task.name || '').replace(/"/g, '""')}"`,
-                    `"${(task.description || '').replace(/"/g, '""')}"`,
-                    task.deadline,
-                    task.priority,
-                    task.createdAt,
-                    task.completedAt || '',
-                    task.archivedAt || ''
-                ];
-                csvContent += row.join(',') + '\n';
-            });
-            
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `task_history_${new Date().toISOString().split('T')[0]}.csv`;
-            link.style.display = 'none';
-            
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            setTimeout(() => URL.revokeObjectURL(url), 100);
-            
-            this.showNotification('History Exported', 'Task history exported to CSV.', 'success');
-            
-        } catch (error) {
-            this.showNotification('Export Failed', 'Error exporting history.', 'danger');
-            console.error('Export error:', error);
-        }
-    }
-    
-    showNotification(title, message, type = 'info') {
-        // Create notification element
-        const notification = document.createElement('div');
-        notification.className = `notification-item ${type}`;
-        notification.innerHTML = `
-            <strong>${title}</strong>
-            <p>${message}</p>
-            <div class="notification-time">${new Date().toLocaleTimeString()}</div>
-        `;
-        
-        const panel = document.getElementById('notificationsList');
-        if (panel) {
-            panel.insertBefore(notification, panel.firstChild);
-            this.showNotificationPanel();
-        }
-        
-        // Also log to console
-        console.log(`${title}: ${message}`);
+    deleteTask(taskId) {
+        this.tasks = this.tasks.filter(t => t.id !== taskId);
+        this.saveAllData();
+        this.displayTasks();
+        this.updateAllStats();
     }
 }
 
-// Initialize the app when DOM is loaded
+// Initialize app
 document.addEventListener('DOMContentLoaded', () => {
-    window.taskReminder = new TaskReminder();
+    window.businessManager = new BusinessManager();
     
-    // Set default date to today
+    // Set default dates
     const today = new Date().toISOString().split('T')[0];
-    const dateInput = document.getElementById('taskDate');
-    if (dateInput) {
-        dateInput.value = today;
-        dateInput.min = today;
-    }
-    
-    // Show welcome notification
-    setTimeout(() => {
-        if (window.taskReminder) {
-            window.taskReminder.showNotification(
-                'Welcome to Task Reminder Pro!',
-                'Tasks are saved automatically. Use "Export" button to download CSV.',
-                'success'
-            );
-        }
-    }, 1500);
-});
-
-// Prevent accidental page refresh
-window.addEventListener('beforeunload', (e) => {
-    // Only show warning if there are unsaved tasks (though we auto-save)
-    if (window.taskReminder && window.taskReminder.tasks.length > 0) {
-        // Modern browsers ignore custom messages
-        e.preventDefault();
-        e.returnValue = '';
-    }
+    document.getElementById('taskDate').value = today;
+    document.getElementById('meetingDate').value = today;
+    document.getElementById('slotDate').value = today;
+    document.getElementById('licenseExpiry').value = new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0];
 });
