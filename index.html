@@ -3,22 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Task Reminder Pro</title>
+    <title>Task & Meeting Manager Pro</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <link rel="icon" type="image/x-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📝</text></svg>">
+    <link rel="icon" type="image/x-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📊</text></svg>">
 </head>
 <body>
-    <!-- Notification Panel -->
+    <!-- Notification Panel (same as before) -->
     <div id="notificationPanel" class="notification-panel">
         <div class="notification-header">
             <h3><i class="fas fa-bell"></i> Recent Notifications</h3>
             <button id="clearNotifications" class="btn-small"><i class="fas fa-trash"></i> Clear</button>
         </div>
-        <div id="notificationsList" class="notifications-list">
-            <!-- Notifications will appear here -->
-        </div>
+        <div id="notificationsList" class="notifications-list"></div>
     </div>
 
     <!-- Main Container -->
@@ -27,128 +25,446 @@
         <header class="header">
             <div class="logo">
                 <i class="fas fa-tasks"></i>
-                <h1>Task Reminder Pro</h1>
-                <span class="tagline">Never Miss a Deadline Again</span>
+                <h1>Business Manager Pro</h1>
+                <span class="tagline">UAE Time Zone</span>
             </div>
             
             <div class="header-controls">
                 <button id="settingsBtn" class="btn-icon" title="Settings">
                     <i class="fas fa-cog"></i>
                 </button>
-                <button id="exportBtn" class="btn-icon" title="Export Tasks">
+                <button id="exportBtn" class="btn-icon" title="Export Data">
                     <i class="fas fa-file-export"></i>
                 </button>
-                <button id="historyBtn" class="btn-icon" title="Task History">
-                    <i class="fas fa-history"></i>
+                <button id="statsBtn" class="btn-icon" title="Statistics">
+                    <i class="fas fa-chart-bar"></i>
                 </button>
-                <div class="stats">
-                    <span id="taskStats">0 Tasks</span>
+                <div class="stats" id="globalStats">
+                    <span>Loading...</span>
                 </div>
             </div>
         </header>
 
-        <!-- Main Content -->
+        <!-- Main Navigation Tabs -->
+        <div class="main-tabs">
+            <button class="tab-btn active" data-tab="tasks">
+                <i class="fas fa-tasks"></i> Tasks
+            </button>
+            <button class="tab-btn" data-tab="companies">
+                <i class="fas fa-building"></i> Companies
+            </button>
+            <button class="tab-btn" data-tab="meetings">
+                <i class="fas fa-calendar-check"></i> Meetings
+            </button>
+            <button class="tab-btn" data-tab="calendar">
+                <i class="fas fa-calendar-alt"></i> Calendar
+            </button>
+        </div>
+
+        <!-- Main Content Area -->
         <main class="main-content">
-            <!-- Left Panel - Add Task -->
-            <div class="left-panel">
-                <div class="card">
-                    <h2><i class="fas fa-plus-circle"></i> Add New Task</h2>
-                    
-                    <div class="form-group">
-                        <label for="taskName"><i class="fas fa-heading"></i> Task Name *</label>
-                        <input type="text" id="taskName" placeholder="Enter task name..." class="form-control">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="taskDesc"><i class="fas fa-align-left"></i> Description</label>
-                        <textarea id="taskDesc" placeholder="Task details..." class="form-control" rows="3"></textarea>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="taskDate"><i class="fas fa-calendar"></i> Due Date *</label>
-                            <input type="date" id="taskDate" class="form-control">
+            <!-- TASKS TAB (Original) -->
+            <div id="tasksTab" class="tab-content active">
+                <div class="content-grid">
+                    <!-- Left Panel - Add Task -->
+                    <div class="left-panel">
+                        <div class="card">
+                            <h2><i class="fas fa-plus-circle"></i> Add New Task</h2>
+                            
+                            <div class="form-group">
+                                <label><i class="fas fa-heading"></i> Task Name *</label>
+                                <input type="text" id="taskName" placeholder="Enter task name..." class="form-control">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label><i class="fas fa-align-left"></i> Description</label>
+                                <textarea id="taskDesc" placeholder="Task details..." class="form-control" rows="3"></textarea>
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label><i class="fas fa-calendar"></i> Date *</label>
+                                    <input type="date" id="taskDate" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-clock"></i> Time *</label>
+                                    <input type="time" id="taskTime" class="form-control" value="18:00">
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label><i class="fas fa-flag"></i> Priority</label>
+                                <div class="priority-buttons">
+                                    <button class="priority-btn low" data-priority="low"><i class="fas fa-flag"></i> Low</button>
+                                    <button class="priority-btn medium active" data-priority="medium"><i class="fas fa-flag"></i> Medium</button>
+                                    <button class="priority-btn high" data-priority="high"><i class="fas fa-flag"></i> High</button>
+                                </div>
+                            </div>
+                            
+                            <button id="addTaskBtn" class="btn-primary btn-large">
+                                <i class="fas fa-plus"></i> Add Task
+                            </button>
+                            
+                            <div class="quick-actions">
+                                <button id="quickToday" class="btn-small btn-outline"><i class="fas fa-bolt"></i> Today</button>
+                                <button id="quickTomorrow" class="btn-small btn-outline"><i class="fas fa-sun"></i> Tomorrow</button>
+                                <button id="quickWeek" class="btn-small btn-outline"><i class="fas fa-calendar-week"></i> This Week</button>
+                            </div>
                         </div>
                         
-                        <div class="form-group">
-                            <label for="taskTime"><i class="fas fa-clock"></i> Time *</label>
-                            <input type="time" id="taskTime" class="form-control" value="18:00">
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label><i class="fas fa-flag"></i> Priority</label>
-                        <div class="priority-buttons">
-                            <button class="priority-btn low" data-priority="low">
-                                <i class="fas fa-flag"></i> Low
-                            </button>
-                            <button class="priority-btn medium active" data-priority="medium">
-                                <i class="fas fa-flag"></i> Medium
-                            </button>
-                            <button class="priority-btn high" data-priority="high">
-                                <i class="fas fa-flag"></i> High
+                        <!-- AI Help Generator -->
+                        <div class="card help-card">
+                            <h2><i class="fas fa-robot"></i> AI Assistance</h2>
+                            <p>Stuck on a task? Get AI help!</p>
+                            <button id="generateHelpBtn" class="btn-secondary">
+                                <i class="fas fa-magic"></i> Generate Help Prompt
                             </button>
                         </div>
                     </div>
-                    
-                    <button id="addTaskBtn" class="btn-primary btn-large">
-                        <i class="fas fa-plus"></i> Add Task
-                    </button>
-                    
-                    <div class="quick-actions">
-                        <button id="quickToday" class="btn-small btn-outline">
-                            <i class="fas fa-bolt"></i> Today
-                        </button>
-                        <button id="quickTomorrow" class="btn-small btn-outline">
-                            <i class="fas fa-sun"></i> Tomorrow
-                        </button>
-                        <button id="quickWeek" class="btn-small btn-outline">
-                            <i class="fas fa-calendar-week"></i> This Week
-                        </button>
+
+                    <!-- Right Panel - Task List -->
+                    <div class="right-panel">
+                        <div class="card">
+                            <div class="task-header">
+                                <h2><i class="fas fa-list-check"></i> Your Tasks</h2>
+                                <div class="task-filters">
+                                    <button class="filter-btn active" data-filter="all">All</button>
+                                    <button class="filter-btn" data-filter="pending">Pending</button>
+                                    <button class="filter-btn" data-filter="completed">Completed</button>
+                                    <button class="filter-btn" data-filter="overdue">Overdue</button>
+                                </div>
+                            </div>
+                            
+                            <div class="task-controls">
+                                <div class="search-box">
+                                    <i class="fas fa-search"></i>
+                                    <input type="text" id="taskSearch" placeholder="Search tasks...">
+                                </div>
+                                <button id="refreshTasks" class="btn-small" title="Refresh">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
+                            
+                            <div id="tasksContainer" class="tasks-container"></div>
+                        </div>
                     </div>
-                </div>
-                
-                <!-- AI Help Generator -->
-                <div class="card help-card">
-                    <h2><i class="fas fa-robot"></i> AI Assistance</h2>
-                    <p>Stuck on a task? Generate a prompt to get AI help!</p>
-                    <button id="generateHelpBtn" class="btn-secondary">
-                        <i class="fas fa-magic"></i> Generate Help Prompt
-                    </button>
                 </div>
             </div>
 
-            <!-- Right Panel - Task List -->
-            <div class="right-panel">
-                <div class="card">
-                    <div class="task-header">
-                        <h2><i class="fas fa-list-check"></i> Your Tasks</h2>
-                        <div class="task-filters">
-                            <button class="filter-btn active" data-filter="all">All</button>
-                            <button class="filter-btn" data-filter="pending">Pending</button>
-                            <button class="filter-btn" data-filter="completed">Completed</button>
-                            <button class="filter-btn" data-filter="overdue">Overdue</button>
+            <!-- COMPANIES TAB (New) -->
+            <div id="companiesTab" class="tab-content">
+                <div class="content-grid">
+                    <!-- Left Panel - Add/Edit Company -->
+                    <div class="left-panel">
+                        <div class="card">
+                            <h2><i class="fas fa-building"></i> Add New Company</h2>
+                            
+                            <div class="form-group">
+                                <label><i class="fas fa-building"></i> Company Name *</label>
+                                <input type="text" id="companyName" class="form-control" placeholder="Enter company name">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label><i class="fas fa-id-card"></i> License Number *</label>
+                                <input type="text" id="licenseNumber" class="form-control" placeholder="License number">
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label><i class="fas fa-calendar-alt"></i> License Expiry *</label>
+                                    <input type="date" id="licenseExpiry" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-industry"></i> Industry</label>
+                                    <select id="companyIndustry" class="form-control">
+                                        <option value="">Select Industry</option>
+                                        <option value="Technology">Technology</option>
+                                        <option value="Healthcare">Healthcare</option>
+                                        <option value="Finance">Finance</option>
+                                        <option value="Education">Education</option>
+                                        <option value="Real Estate">Real Estate</option>
+                                        <option value="Retail">Retail</option>
+                                        <option value="Manufacturing">Manufacturing</option>
+                                        <option value="Services">Services</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label><i class="fas fa-map-marker-alt"></i> Full Address *</label>
+                                <textarea id="companyAddress" class="form-control" rows="2" placeholder="Street, city, country..."></textarea>
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label><i class="fab fa-whatsapp"></i> WhatsApp Number *</label>
+                                    <input type="tel" id="companyWhatsapp" class="form-control" placeholder="+971 XX XXX XXXX">
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-phone"></i> Phone Number</label>
+                                    <input type="tel" id="companyPhone" class="form-control" placeholder="Alternative number">
+                                </div>
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label><i class="fas fa-envelope"></i> Email Address</label>
+                                    <input type="email" id="companyEmail" class="form-control" placeholder="company@email.com">
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-globe"></i> Website</label>
+                                    <input type="url" id="companyWebsite" class="form-control" placeholder="https://...">
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label><i class="fas fa-user"></i> Contact Person</label>
+                                <input type="text" id="contactPerson" class="form-control" placeholder="Full name">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label><i class="fas fa-sticky-note"></i> Notes</label>
+                                <textarea id="companyNotes" class="form-control" rows="2" placeholder="Additional notes..."></textarea>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label><i class="fas fa-file-upload"></i> Documents</label>
+                                <div class="file-upload-area" id="companyFileUpload">
+                                    <input type="file" id="companyDocuments" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+                                    <div class="file-upload-label">
+                                        <i class="fas fa-cloud-upload-alt"></i>
+                                        <span>Drop files or click to upload</span>
+                                        <small>License, registration, etc.</small>
+                                    </div>
+                                </div>
+                                <div id="uploadedFiles" class="uploaded-files"></div>
+                            </div>
+                            
+                            <button id="addCompanyBtn" class="btn-primary btn-large">
+                                <i class="fas fa-plus-circle"></i> Add Company
+                            </button>
+                            <button id="resetCompanyForm" class="btn-secondary btn-small" style="margin-top:10px; width:100%;">
+                                <i class="fas fa-undo"></i> Reset Form
+                            </button>
                         </div>
                     </div>
-                    
-                    <div class="task-controls">
-                        <div class="search-box">
-                            <i class="fas fa-search"></i>
-                            <input type="text" id="taskSearch" placeholder="Search tasks...">
+
+                    <!-- Right Panel - Companies List -->
+                    <div class="right-panel">
+                        <div class="card">
+                            <div class="task-header">
+                                <h2><i class="fas fa-building"></i> Companies</h2>
+                                <div class="task-filters">
+                                    <button class="filter-btn active" data-company-filter="all">All</button>
+                                    <button class="filter-btn" data-company-filter="active">Active License</button>
+                                    <button class="filter-btn" data-company-filter="expiring">Expiring Soon</button>
+                                    <button class="filter-btn" data-company-filter="expired">Expired</button>
+                                </div>
+                            </div>
+                            
+                            <div class="task-controls">
+                                <div class="search-box">
+                                    <i class="fas fa-search"></i>
+                                    <input type="text" id="companySearch" placeholder="Search companies...">
+                                </div>
+                                <button id="exportCompaniesBtn" class="btn-small" title="Export Companies">
+                                    <i class="fas fa-file-export"></i>
+                                </button>
+                            </div>
+                            
+                            <div id="companiesContainer" class="tasks-container"></div>
                         </div>
-                        <button id="refreshTasks" class="btn-small" title="Refresh">
-                            <i class="fas fa-sync-alt"></i>
-                        </button>
                     </div>
-                    
-                    <div id="tasksContainer" class="tasks-container">
-                        <!-- Tasks will load here -->
-                        <div class="empty-state">
-                            <i class="fas fa-clipboard-list fa-3x"></i>
-                            <h3>No Tasks Yet</h3>
-                            <p>Add your first task using the form on the left</p>
+                </div>
+            </div>
+
+            <!-- MEETINGS TAB (New) -->
+            <div id="meetingsTab" class="tab-content">
+                <div class="content-grid">
+                    <!-- Left Panel - Schedule Meeting -->
+                    <div class="left-panel">
+                        <div class="card">
+                            <h2><i class="fas fa-calendar-plus"></i> Schedule Meeting</h2>
+                            
+                            <div class="form-group">
+                                <label><i class="fas fa-building"></i> Select Company *</label>
+                                <select id="meetingCompany" class="form-control">
+                                    <option value="">Choose a company...</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label><i class="fas fa-heading"></i> Meeting Title *</label>
+                                <input type="text" id="meetingTitle" class="form-control" placeholder="e.g., Initial Discussion">
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label><i class="fas fa-calendar"></i> Date * (UAE Time)</label>
+                                    <input type="date" id="meetingDate" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-clock"></i> Time * (UAE)</label>
+                                    <input type="time" id="meetingTime" class="form-control">
+                                </div>
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label><i class="fas fa-hourglass-half"></i> Duration</label>
+                                    <select id="meetingDuration" class="form-control">
+                                        <option value="30">30 minutes</option>
+                                        <option value="60">1 hour</option>
+                                        <option value="90">1.5 hours</option>
+                                        <option value="120">2 hours</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label><i class="fas fa-pause-circle"></i> Buffer Time</label>
+                                    <select id="meetingBuffer" class="form-control">
+                                        <option value="0">No buffer</option>
+                                        <option value="15">15 minutes</option>
+                                        <option value="30">30 minutes</option>
+                                        <option value="60">1 hour</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label><i class="fas fa-video"></i> Meeting Platform</label>
+                                <select id="meetingPlatform" class="form-control">
+                                    <option value="Zoom">Zoom</option>
+                                    <option value="Teams">Microsoft Teams</option>
+                                    <option value="Google Meet">Google Meet</option>
+                                    <option value="WhatsApp">WhatsApp Video</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label><i class="fas fa-link"></i> Meeting Link</label>
+                                <input type="url" id="meetingLink" class="form-control" placeholder="https://...">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label><i class="fas fa-sticky-note"></i> Agenda/Notes</label>
+                                <textarea id="meetingAgenda" class="form-control" rows="3" placeholder="Meeting agenda..."></textarea>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label><i class="fas fa-file-alt"></i> Required Documents</label>
+                                <div class="checkbox-group">
+                                    <label><input type="checkbox" value="license" class="doc-required"> License Copy</label>
+                                    <label><input type="checkbox" value="registration" class="doc-required"> Registration</label>
+                                    <label><input type="checkbox" value="id" class="doc-required"> ID/Passport</label>
+                                    <label><input type="checkbox" value="contract" class="doc-required"> Contract</label>
+                                    <label><input type="checkbox" value="other" class="doc-required"> Other</label>
+                                </div>
+                            </div>
+                            
+                            <div class="availability-checker">
+                                <h3><i class="fas fa-clock"></i> Check Availability</h3>
+                                <button id="checkAvailabilityBtn" class="btn-secondary">
+                                    <i class="fas fa-search"></i> Check Slot Availability
+                                </button>
+                                <div id="availabilityResult" class="availability-result"></div>
+                            </div>
+                            
+                            <button id="scheduleMeetingBtn" class="btn-primary btn-large" disabled>
+                                <i class="fas fa-calendar-check"></i> Schedule Meeting
+                            </button>
+                        </div>
+                        
+                        <!-- Quick Availability Slots -->
+                        <div class="card">
+                            <h3><i class="fas fa-clock"></i> Send Availability Slots</h3>
+                            <p>Generate time slots to send to company</p>
+                            <div class="form-group">
+                                <label>Select Date</label>
+                                <input type="date" id="slotDate" class="form-control">
+                            </div>
+                            <div class="form-group">
+                                <label>Working Hours (UAE)</label>
+                                <div class="form-row">
+                                    <input type="time" id="workStart" class="form-control" value="09:00">
+                                    <span style="padding:0 10px;">to</span>
+                                    <input type="time" id="workEnd" class="form-control" value="17:00">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Meeting Duration</label>
+                                    <select id="slotDuration" class="form-control">
+                                        <option value="30">30 min</option>
+                                        <option value="60">1 hour</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Break Between</label>
+                                    <select id="slotBreak" class="form-control">
+                                        <option value="15">15 min</option>
+                                        <option value="30">30 min</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <button id="generateSlotsBtn" class="btn-secondary">
+                                <i class="fas fa-clock"></i> Generate Available Slots
+                            </button>
+                            <div id="generatedSlots" class="generated-slots"></div>
+                            <button id="copySlotsBtn" class="btn-small" style="display:none;">
+                                <i class="fas fa-copy"></i> Copy to Clipboard
+                            </button>
                         </div>
                     </div>
+
+                    <!-- Right Panel - Meetings List -->
+                    <div class="right-panel">
+                        <div class="card">
+                            <div class="task-header">
+                                <h2><i class="fas fa-calendar-check"></i> Upcoming Meetings</h2>
+                                <div class="task-filters">
+                                    <button class="filter-btn active" data-meeting-filter="upcoming">Upcoming</button>
+                                    <button class="filter-btn" data-meeting-filter="today">Today</button>
+                                    <button class="filter-btn" data-meeting-filter="pending">Pending Confirmation</button>
+                                    <button class="filter-btn" data-meeting-filter="past">Past</button>
+                                </div>
+                            </div>
+                            
+                            <div class="task-controls">
+                                <div class="search-box">
+                                    <i class="fas fa-search"></i>
+                                    <input type="text" id="meetingSearch" placeholder="Search meetings...">
+                                </div>
+                                <button id="exportMeetingsBtn" class="btn-small">
+                                    <i class="fas fa-file-export"></i>
+                                </button>
+                            </div>
+                            
+                            <div id="meetingsContainer" class="tasks-container"></div>
+                        </div>
+                        
+                        <!-- Today's Meetings Summary -->
+                        <div class="card" id="todayMeetingsCard">
+                            <h3><i class="fas fa-sun"></i> Today's Meetings (UAE)</h3>
+                            <div id="todayMeetingsList" class="today-meetings"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CALENDAR TAB (New) -->
+            <div id="calendarTab" class="tab-content">
+                <div class="calendar-container">
+                    <div class="calendar-header">
+                        <button id="prevMonth"><i class="fas fa-chevron-left"></i></button>
+                        <h2 id="currentMonthYear"></h2>
+                        <button id="nextMonth"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                    <div class="calendar-weekdays">
+                        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+                    </div>
+                    <div id="calendarGrid" class="calendar-grid"></div>
                 </div>
             </div>
         </main>
@@ -156,24 +472,21 @@
         <!-- Footer -->
         <footer class="footer">
             <div class="reminder-status">
-                <span id="reminderStatus">
-                    <i class="fas fa-bell-slash"></i> Reminders: Off
-                </span>
+                <span id="reminderStatus"><i class="fas fa-bell-slash"></i> Reminders: Off</span>
                 <span class="last-saved" id="lastSaved">Never saved</span>
             </div>
             <div class="footer-info">
-                <span>Total Tasks: <span id="totalTasks">0</span></span>
-                <span>Pending: <span id="pendingTasks">0</span></span>
-                <span>Completed: <span id="completedTasks">0</span></span>
+                <span>UAE Time: <span id="uaeTime"></span></span>
+                <span>Companies: <span id="totalCompanies">0</span></span>
+                <span>Meetings: <span id="totalMeetings">0</span></span>
                 <button id="notificationToggle" class="btn-small">
-                    <i class="fas fa-bell"></i> Enable Notifications
+                    <i class="fas fa-bell"></i> Enable
                 </button>
             </div>
         </footer>
     </div>
 
-    <!-- Modals -->
-    <!-- Settings Modal -->
+    <!-- Settings Modal (Updated) -->
     <div id="settingsModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -186,12 +499,13 @@
                     <div class="form-group">
                         <label>Reminder Before Deadline:</label>
                         <select id="reminderTime" class="form-control">
-                            <option value="1">1 minute</option>
                             <option value="5">5 minutes</option>
                             <option value="10" selected>10 minutes</option>
                             <option value="15">15 minutes</option>
                             <option value="30">30 minutes</option>
                             <option value="60">1 hour</option>
+                            <option value="120">2 hours</option>
+                            <option value="1440">1 day</option>
                         </select>
                     </div>
                     
@@ -212,6 +526,26 @@
                             Enable Desktop Notifications
                         </label>
                     </div>
+                    
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="licenseReminders" checked>
+                            License Expiry Reminders
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="settings-section">
+                    <h3><i class="fas fa-clock"></i> UAE Time Zone</h3>
+                    <p>All times are in UAE time (GMT+4)</p>
+                    <div class="form-group">
+                        <label>Default Working Hours:</label>
+                        <div class="form-row">
+                            <input type="time" id="defaultWorkStart" class="form-control" value="09:00">
+                            <span>to</span>
+                            <input type="time" id="defaultWorkEnd" class="form-control" value="17:00">
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="settings-section">
@@ -222,18 +556,17 @@
                             <option value="1">1 minute</option>
                             <option value="5" selected>5 minutes</option>
                             <option value="10">10 minutes</option>
-                            <option value="30">30 minutes</option>
                         </select>
                     </div>
                     
                     <div class="button-group">
-                        <button id="exportCSV" class="btn-secondary">
-                            <i class="fas fa-file-csv"></i> Export to CSV
+                        <button id="exportAllData" class="btn-secondary">
+                            <i class="fas fa-file-export"></i> Export All Data
                         </button>
-                        <button id="importCSV" class="btn-secondary">
-                            <i class="fas fa-file-import"></i> Import CSV
+                        <button id="importData" class="btn-secondary">
+                            <i class="fas fa-file-import"></i> Import Data
                         </button>
-                        <button id="backupTasks" class="btn-secondary">
+                        <button id="backupData" class="btn-secondary">
                             <i class="fas fa-save"></i> Backup Now
                         </button>
                     </div>
@@ -242,82 +575,76 @@
         </div>
     </div>
 
-    <!-- AI Help Modal -->
-    <div id="helpModal" class="modal">
+    <!-- Company Details Modal -->
+    <div id="companyDetailsModal" class="modal">
         <div class="modal-content large-modal">
             <div class="modal-header">
-                <h2><i class="fas fa-robot"></i> AI Help Generator</h2>
+                <h2><i class="fas fa-building"></i> Company Details</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body" id="companyDetailsContent"></div>
+        </div>
+    </div>
+
+    <!-- Meeting Details Modal -->
+    <div id="meetingDetailsModal" class="modal">
+        <div class="modal-content large-modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-calendar-check"></i> Meeting Details</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body" id="meetingDetailsContent"></div>
+        </div>
+    </div>
+
+    <!-- Document Upload Modal -->
+    <div id="documentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-file-upload"></i> Upload Documents</h2>
                 <button class="modal-close">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label>Select Task to Get Help With:</label>
-                    <select id="helpTaskSelect" class="form-control">
-                        <!-- Tasks will be populated here -->
+                    <label>Select Meeting/Company:</label>
+                    <select id="docTargetType" class="form-control">
+                        <option value="company">Company Document</option>
+                        <option value="meeting">Meeting Document</option>
                     </select>
                 </div>
-                
                 <div class="form-group">
-                    <label>Problem Type:</label>
-                    <select id="problemType" class="form-control">
-                        <option value="technical">Technical Issue</option>
-                        <option value="time">Time Management</option>
-                        <option value="understanding">Understanding Task</option>
-                        <option value="resources">Lack of Resources</option>
-                        <option value="motivation">Motivation/Procrastination</option>
+                    <label>Select Item:</label>
+                    <select id="docTargetId" class="form-control"></select>
+                </div>
+                <div class="form-group">
+                    <label>Document Type:</label>
+                    <select id="docType" class="form-control">
+                        <option value="license">License</option>
+                        <option value="registration">Registration</option>
+                        <option value="id">ID/Passport</option>
+                        <option value="contract">Contract</option>
                         <option value="other">Other</option>
                     </select>
                 </div>
-                
-                <div class="form-group">
-                    <label>Describe the Problem:</label>
-                    <textarea id="problemDesc" class="form-control" rows="3" 
-                              placeholder="What specific issue are you facing?"></textarea>
-                </div>
-                
-                <div class="form-group">
-                    <label>What Have You Tried?</label>
-                    <textarea id="triedSolutions" class="form-control" rows="2" 
-                              placeholder="List what you've attempted so far..."></textarea>
-                </div>
-                
-                <button id="generatePromptBtn" class="btn-primary btn-large">
-                    <i class="fas fa-magic"></i> Generate AI Prompt
-                </button>
-                
-                <div id="promptResult" class="prompt-result" style="display: none;">
-                    <h3>Your AI Prompt:</h3>
-                    <div class="prompt-box">
-                        <textarea id="generatedPrompt" readonly class="form-control" rows="10"></textarea>
-                        <div class="prompt-actions">
-                            <button id="copyPrompt" class="btn-secondary">
-                                <i class="fas fa-copy"></i> Copy to Clipboard
-                            </button>
-                            <button id="savePrompt" class="btn-secondary">
-                                <i class="fas fa-save"></i> Save as File
-                            </button>
-                            <button id="useWithAI" class="btn-primary">
-                                <i class="fas fa-robot"></i> Use with AI Assistant
-                            </button>
-                        </div>
+                <div class="file-upload-area">
+                    <input type="file" id="documentFile" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+                    <div class="file-upload-label">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <span>Choose files or drag here</span>
                     </div>
                 </div>
+                <button id="uploadDocumentsBtn" class="btn-primary btn-large">
+                    <i class="fas fa-upload"></i> Upload
+                </button>
             </div>
         </div>
     </div>
 
-    <!-- Sound Elements -->
-    <audio id="alertSound1" preload="auto">
-        <source src="sounds/alert1.mp3" type="audio/mpeg">
-    </audio>
-    <audio id="alertSound2" preload="auto">
-        <source src="sounds/alert2.mp3" type="audio/mpeg">
-    </audio>
-    <audio id="alertSound3" preload="auto">
-        <source src="sounds/alert3.mp3" type="audio/mpeg">
-    </audio>
+    <!-- Audio Elements -->
+    <audio id="alertSound1" preload="auto"><source src="sounds/alert1.mp3" type="audio/mpeg"></audio>
+    <audio id="alertSound2" preload="auto"><source src="sounds/alert2.mp3" type="audio/mpeg"></audio>
+    <audio id="alertSound3" preload="auto"><source src="sounds/alert3.mp3" type="audio/mpeg"></audio>
 
-    <!-- JavaScript -->
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.0/papaparse.min.js"></script>
     <script src="script.js"></script>
 </body>
